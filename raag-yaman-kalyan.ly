@@ -17,8 +17,8 @@ textI = \lyricmode {
 \layout {
   \context {
     \Voice
-    \consists #Voice_line_engraver
-    \consists #Remove_voice_line_when_slur_engraver
+    %\consists #Voice_line_engraver
+    %\consists #Remove_voice_line_when_slur_engraver
     %\override VoiceFollower.style = #'slur
     %\slurDashed
     }
@@ -34,16 +34,16 @@ textI = \lyricmode {
         \melodyGatI 
       }
     }
-    \new Staff {
-      \set Staff.instrumentName = "Sargam Voice"
-      \key D \major
-      \transpose S Re {
-        \tintal
-        \new SargamVoice {
-          \melodyGatI 
-        }
-      }
-    }
+%     \new Staff {
+%       \set Staff.instrumentName = "Sargam Voice"
+%       \key D \major
+%       \transpose S Re {
+%         \tintal
+%         \new SargamVoice {
+%           \melodyGatI 
+%         }
+%       }
+%     }
     \new SargamStaff = "my fist sargam staff" {
       \set SargamStaff.instrumentName = "Sargam Staff"
       \key D \major
@@ -54,7 +54,7 @@ textI = \lyricmode {
         }
       
     }
-    \new Lyrics \lyricsto "gatI" { \textI }
+    % \new Lyrics \lyricsto "gatI" { \textI }
   >>
   \header {
     title = "Raag Yalman Kalyan"
