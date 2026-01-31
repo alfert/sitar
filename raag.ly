@@ -82,133 +82,9 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
 #(define (ly:event-length event moment)
   (ly:event-property event 'length))
 
-#(define (Voice_line_engraver context)
-   (let (
-         ;; Current follower
-         (follower #f)
-         ;; Note head grob acknowledged
-         (note-head #f)
-         ;; Moment at which the follower should end. If there is no note head
-         ;; at that moment (e.g., because there is a rest), it is removed.
-         (expected-end-mom #f)
-         ;; Track if we're inside a beam
-         (beam-active #f))
-     (make-engraver
-       (acknowledgers
-        ((note-head-interface engraver grob source-engraver)
-         ;; Only acknowledge note heads that are NOT beamed eighth notes
-         (let* ((cause (ly:grob-property grob 'cause))
-                (event-dur-log (if (ly:stream-event? cause)
-                                   (ly:duration-log (ly:event-property cause 'duration))
-                                   #f)))
-           ;; Skip beamed eighth notes (event dur-log = 3)
-           (when (not (and beam-active (number? event-dur-log) (= event-dur-log 3)))
-             (set! note-head grob)))))
-
-      (listeners
-       ;; Track beam events to know when we're inside a beam
-       ((beam-event engraver event)
-        (let ((direction (ly:event-property event 'span-direction)))
-          (cond
-           ((= LEFT direction) (set! beam-active #t))
-           ((= RIGHT direction) (set! beam-active #f))))))
-
-      ((process-acknowledged engraver)
-       (when note-head
-         ;; End the previous follower on this note head.
-         (when follower
-           (ly:spanner-set-bound! follower RIGHT note-head)
-           (ly:engraver-announce-end-grob engraver follower note-head)
-           (set! follower #f)
-           (set! expected-end-mom #f))
-         ;; Create a new follower starting from this note head.
-         ;; (set! follower (ly:engraver-make-grob engraver 'VoiceFollower note-head))
-         (set! follower (ly:engraver-make-grob engraver 'Slur note-head))
-         (ly:spanner-set-bound! follower LEFT note-head)
-         ;; Record the moment at which we expect the follower to end.
-         (set! expected-end-mom
-               (let ((current (ly:context-current-moment context))
-                     (note-event (ly:grob-property note-head 'cause)))
-               (ly:moment-add current (ly:event-length note-event current))))
-         (set! note-head #f)))
-      ((stop-translation-timestep engraver)
-       ;; If the follower reached its expected end moment without finding
-       ;; a note head to end on (e.g., because of a rest), remove it.
-       (let ((current (ly:context-current-moment context)))
-         (when (and expected-end-mom (moment<=? expected-end-mom current))
-           (ly:grob-suicide! follower)
-           (set! follower #f)
-           (set! expected-end-mom #f)))
-       ;; Bookkeeping
-       (set! note-head #f))
-      ((finalize engraver)
-       ;; Remove any unterminated follower
-       (when follower
-         (ly:grob-suicide! follower))))))
-
-#(define (Remove_voice_line_when_slur_engraver context)
-   (let (
-         ;; Any voice follower started in this time step
-         (started-voice-follower #f)
-         ;; Any voice follower ended in this time step
-         (ended-voice-follower #f)
-         ;; The currently "active" voice follower; a follower is active
-         ;; from its start time step included to its end time step excluded.
-         (active-voice-follower #f)
-         ;; The voice follower that was active at the previous time step.
-         (previous-active-voice-follower #f)
-         ;; Any slur started in this time step
-         (started-slur #f)
-         ;; Any slur started in the previous time step
-         (previous-started-slur #f)
-         ;; Any slur of which we acknowledge the end, meaning that it ended
-         ;; in the *previous* time step.
-         (previous-ended-slur #f)
-         ;; The slur that was active in the previous time step.
-         (previous-active-slur #f))
-     (make-engraver
-      (acknowledgers
-       ((line-spanner-interface engraver grob source-engraver)
-        ;; Ideally, we'd have a specific interface for VoiceFollower,
-        ;; but it doesn't exist.
-        ;;(when (eq? 'VoiceFollower (grob::name grob))
-        (when (eq? 'Slur (grob::name grob))
-          (set! started-voice-follower grob)))
-       ((slur-interface engraver grob source-engraver)
-        (set! started-slur grob)))
-      (end-acknowledgers
-       ((line-spanner-interface engraver grob source-engraver)
-        ;;(when (eq? 'VoiceFollower (grob::name grob))
-        (when (eq? 'Slur (grob::name grob))
-          (set! ended-voice-follower grob)))
-       ((slur-interface engraver grob source-engraver)
-        (set! previous-ended-slur grob)))
-      ((stop-translation-timestep engraver)
-       ;; Determine if there was an active slur in the previous time step.
-       (when previous-ended-slur
-         (set! previous-active-slur #f)
-         (set! previous-ended-slur #f))
-       (when previous-started-slur
-         (set! previous-active-slur previous-started-slur))
-       ;; If a voice follower and a slur were both active in the previous
-       ;; time step, remove the voice follower.
-       (when (and previous-active-voice-follower previous-active-slur)
-         (ly:grob-suicide! previous-active-voice-follower))
-       ;; Determine if there was an active voice follower in this time step
-       (when ended-voice-follower
-         (set! active-voice-follower #f)
-         (set! ended-voice-follower #f))
-       (when started-voice-follower
-         (set! active-voice-follower started-voice-follower)
-         (set! started-voice-follower #f))
-       ;; Set previous-* variables for the next time step.
-       (set! previous-active-voice-follower active-voice-follower)
-       (set! previous-started-slur started-slur)
-       (set! started-slur #f)))))
 
 
-
-%%%
+%%% 
 %%% Beaming könnte über die Markup-Kommandos \tie gehen,
 %%% Ebenso Slides / Pulloffs mit \overtie
 %%% Auch dieser Ansatz könnte eine Vorlage sein, weil Noten automatisch
@@ -258,13 +134,20 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
        (when (and (not beam-active) (>= (length beam-eighth-notes) 2))
          (let loop ((notes beam-eighth-notes))
            (when (>= (length notes) 2)
-             (let* ((left-nh (car notes))
-                    (right-nh (cadr notes))
-                    (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
-               (ly:spanner-set-bound! tie LEFT left-nh)
-               (ly:spanner-set-bound! tie RIGHT right-nh)
-               (ly:grob-set-property! tie 'direction DOWN)
-               (ly:engraver-announce-end-grob engraver tie right-nh))
+              (let* ((left-nh (car notes))
+                     (right-nh (cadr notes))
+                     (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
+                (ly:spanner-set-bound! tie LEFT left-nh)
+                (ly:spanner-set-bound! tie RIGHT right-nh)
+                (ly:grob-set-property! tie 'direction DOWN)
+                ;; Tune tie appearance using details (relative positioning)
+                (let ((details (ly:grob-property tie 'details '())))
+                  (ly:grob-set-property! tie 'details
+                    (append details
+                      '((height-limit . 0.6)           ; Smaller, flatter ties
+                        (note-head-gap . 0.15)         ; Small gap below note heads
+                        (ratio . 0.25)))))             ; Less curved (flatter)
+                (ly:engraver-announce-end-grob engraver tie right-nh))
              (loop (cdr notes))))
          (set! beam-eighth-notes '()))
        (set! current-note-head #f))
@@ -322,13 +205,8 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     \override NoteHead.style = #'slash
     \hide Stem
     \alias Voice
-
-    %% Voice lines for non-beamed notes (meend/glissando)
-    %% \consists #Voice_line_engraver
-    %% \consists #Remove_voice_line_when_slur_engraver
-
-    %% Ties for beamed eighth notes
-    \consists Tie_engraver
+    
+    %% Ties are handled in SargamStaff context, not here
   }
   \context {
     \Staff
@@ -365,6 +243,12 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     %% Ties for beamed eighth notes
     \consists Tie_engraver
     \consists #Sargam_beam_tie_engraver
+    
+    %% Tie positioning for Sargam notation (relative positioning via details)
+    \override Tie.direction = #DOWN
+    \override Tie.details.height-limit = #0.6
+    \override Tie.details.note-head-gap = #0.15
+    \override Tie.details.ratio = #0.25
 
     \alias RhythmicStaff
   }
