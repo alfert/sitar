@@ -86,12 +86,21 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
 
 %%% RHYTHMIC GROUPING ARC
 %%%
-%%% In Sargam notation a curved arc UNDER a group of note letters encodes the
-%%% rhythmic subdivision (it replaces the Western beam):
-%%%   2 notes under one arc = eighth notes
-%%%   3 notes under one arc = triplet
-%%%   4 notes under one arc = sixteenth notes, etc.
-%%% So we draw exactly ONE arc per beamed group, spanning the whole group.
+%%% In Sargam notation a curved arc UNDER the note letters marks ONE BEAT
+%%% (= one quarter note). The number of events that fall in that beat shows how
+%%% the beat is subdivided:
+%%%   1 event  = a plain quarter note (NO arc is drawn)
+%%%   2 events = eighth notes
+%%%   3 events = triplet
+%%%   4 events = sixteenth notes, etc.
+%%% Events are grouped by the beat they start in; an arc is drawn for every beat
+%%% that holds 2+ events. Rests count as events (a held/empty subdivision), so a
+%%% beat of `S8 r8` is arced. See sargam-rhythm.jpeg for the authoritative rule.
+%%%
+%%% This is purely about musical TIME (beats), NOT about how LilyPond beams the
+%%% notes. The same notes might be drawn under one beam or several, or no beam
+%%% at all (auto-beaming), and the arcs are unaffected: e.g. in 4/4 the six
+%%% eighths `M8 M P P D D` are one beam but THREE beats, so they get THREE arcs.
 %%%
 %%% WHY a Tie grob with FORCED control-points (see EXPERIMENT-LOG.md):
 %%% The SargamStaff has StaffSymbol.line-count = 0 and pitch-squashed note
@@ -102,8 +111,9 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
 %%% computed lazily (as a grob callback) once horizontal positions are known.
 
 %% Build the four Bezier control points for the grouping arc that spans from
-%% @var{left-nh} to @var{right-nh}. Coordinates are returned relative to the
-%% tie's own origin so they are independent of where the grob is parented.
+%% @var{left-nh} to @var{right-nh} (each may be a note head OR a rest).
+%% Coordinates are returned relative to the tie's own origin so they are
+%% independent of where the grob is parented.
 #(define ((sargam-arc-control-points left-nh right-nh) grob)
    (let* ((refp (ly:grob-common-refpoint left-nh right-nh X))
           (lx (ly:grob-relative-coordinate left-nh refp X))
@@ -125,10 +135,10 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
            (cons b top))))
 
 %% One beat = one quarter note. The grouping arc spans exactly one beat; the
-%% number of note heads under it shows the subdivision of that beat
-%% (2 = eighths, 3 = triplet, 4 = sixteenths, ...). A beat with a single note
-%% gets no arc. This follows the Sargam rhythmic notation (sargam-rhythm.jpeg)
-%% and is independent of how LilyPond happens to beam the notes.
+%% number of events (note heads and/or rests) under it shows the subdivision of
+%% that beat (2 = eighths, 3 = triplet, 4 = sixteenths, ...). A beat with a
+%% single event gets no arc. This follows the Sargam rhythmic notation
+%% (sargam-rhythm.jpeg) and is independent of how LilyPond beams the notes.
 #(define sargam-beat-length 1/4)
 
 %% Which beat does musical moment @var{m} (a rational) fall in?
@@ -272,7 +282,7 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     \hide Stem
     \alias Voice
   }
-  
+
   \context {
     \Staff
     \accepts SargamVoice
