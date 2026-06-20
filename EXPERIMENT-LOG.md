@@ -138,9 +138,33 @@ if it has < 2 stems (which also filters out phantom/partial Beam grobs).
   together as in the book (currently spread when aligned under a Melody staff).
 - Bols (up/down stroke marks) under the letters — separate feature.
 
+## NoteColumns in Sargam (verified viable; deferred)
+
+`SargamVoice` currently has **no NoteColumn**, which is why **manual slurs are
+invisible** (a Slur attaches to a NoteColumn). We may want manual slurs later
+for **meend / glissando** notation.
+
+Tested adding both engravers to `SargamVoice`:
+
+```lilypond
+\context {
+  \SargamVoice
+  \consists Rhythmic_column_engraver   % creates NoteColumn (NOT "Note_column_engraver", which doesn't exist)
+  \consists Slur_engraver
+}
+```
+
+Result: **non-breaking** — the grouping arcs and horizontal spacing are
+unchanged, and **manual slurs `( )` now render** (verified with `D8( D)`).
+
+**Decision:** do NOT add this yet. There is no consumer for slurs in the current
+notation, so we avoid changing the core context without an immediate need.
+Enable it (the snippet above) when we implement meend/glissando.
+
 ## Key source references (local LilyPond checkout)
 
 - `lily/slur-engraver.cc` — Slur attaches to NoteColumn (why slurs vanish here).
+- `lily/rhythmic-column-engraver.cc` — the engraver that makes `NoteColumn`.
 - `lily/tie.cc`, `lily/staff-symbol-referencer.cc` — why auto Tie positioning
   fails with `line-count = 0`.
 - `lily/pitch-squash-engraver.cc` — squashing behavior.
