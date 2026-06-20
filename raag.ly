@@ -124,73 +124,68 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
            (cons (+ a (* span 0.75)) dip)
            (cons b top))))
 
+%% Return the first note head of a stem grob (or #f).
+#(define (stem-first-note-head stem)
+   (let ((heads (ly:grob-object stem 'note-heads #f)))
+     (if (and heads (ly:grob-array? heads) (> (ly:grob-array-length heads) 0))
+         (ly:grob-array-ref heads 0)
+         #f)))
+
+%% Given a Beam grob, return (first-note-head . last-note-head) of the group,
+%% or #f if it cannot be determined. Works for BOTH explicit [ ] beams and
+%% automatic beams, because both produce a Beam grob with member stems.
+#(define (beam-end-note-heads beam)
+   (let ((stems (ly:grob-object beam 'stems #f)))
+     (if (and stems (ly:grob-array? stems) (> (ly:grob-array-length stems) 1))
+         (let* ((lst (ly:grob-array->list stems))
+                (first-nh (stem-first-note-head (car lst)))
+                (last-nh (stem-first-note-head (car (last-pair lst)))))
+           (if (and first-nh last-nh)
+               (cons first-nh last-nh)
+               #f))
+         #f)))
+
 #(define (Sargam_beam_tie_engraver context)
    "Creates one grouping arc spanning each beamed group of Sargam notes.
     The number of notes under the arc encodes the subdivision
-    (2 = eighths, 3 = triplet, 4 = sixteenths, ...)."
-   (let* (
-          ;; All note heads collected in the current BEAM (newest first)
-          (beam-notes '())
-          ;; Track if we're inside a beam
-          (beam-active #f))
+    (2 = eighths, 3 = triplet, 4 = sixteenths, ...).
+
+    Works for explicit [ ] beams AND automatic beams: instead of listening
+    for beam-events (which only explicit beams emit) we acknowledge the Beam
+    GROB itself and, at finalize, read its first/last note heads from its
+    member stems. We must wait until finalize because an explicit beam's
+    stem set is only fully populated after its closing note is processed."
+   (let ((beams '()))   ; every Beam grob seen in this context
      (make-engraver
       (acknowledgers
-       ;; Collect note heads shorter than a quarter (dur-log >= 3:
-       ;; eighths, sixteenths, triplet members, ...) directly here, so we do
-       ;; not depend on process-acknowledged firing relative to the beam-end
-       ;; event (the closing note of a pair is acknowledged in the same
-       ;; timestep as the beam's RIGHT event).
-       ((note-head-interface engraver grob source-engraver)
-        (let* ((cause (ly:grob-property grob 'cause))
-               (event-dur-log (if (ly:stream-event? cause)
-                                  (ly:duration-log (ly:event-property cause 'duration))
-                                  #f)))
-          (when (and beam-active
-                     (number? event-dur-log) (>= event-dur-log 3))
-            (set! beam-notes (cons grob beam-notes))))))
-
-      (listeners
-       ;; Track beam events to know when beam starts/ends
-       ((beam-event engraver event)
-        (let ((direction (ly:event-property event 'span-direction)))
-          (cond
-           ((= LEFT direction)
-            (set! beam-active #t)
-            (set! beam-notes '()))
-           ((= RIGHT direction)
-            ;; Keep beam-active true for the rest of this timestep so the
-            ;; closing note head is still collected; we draw the arc at
-            ;; stop-translation-timestep and reset there.
-             (set! beam-active 'ending))))))
-
-      ((stop-translation-timestep engraver)
-       ;; When the beam just ended, draw ONE arc spanning the whole group.
-       (when (and (eq? beam-active 'ending) (>= (length beam-notes) 2))
-         (let* ((ordered (reverse beam-notes))
-                (left-nh (car ordered))
-                (right-nh (car (last-pair ordered)))
-                (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
-           (ly:spanner-set-bound! tie LEFT left-nh)
-           (ly:spanner-set-bound! tie RIGHT right-nh)
-           ;; Anchor the arc's Y (and X) coordinate system on the left note
-           ;; head, so the forced control points are interpreted relative to
-           ;; the Sargam letters in EVERY context (single- and multi-staff).
-           ;; Without this the arc inherits an ambiguous Y reference in
-           ;; multi-staff scores and renders far away / off the staff.
-           (ly:grob-set-parent! tie Y left-nh)
-           (ly:grob-set-parent! tie X left-nh)
-           (ly:grob-set-property! tie 'direction DOWN)
-           ;; Forced control points -> bypass broken auto positioning.
-           (ly:grob-set-property! tie 'control-points
-             (sargam-arc-control-points left-nh right-nh))
-           (ly:engraver-announce-end-grob engraver tie right-nh)))
-       (when (eq? beam-active 'ending)
-         (set! beam-active #f)
-         (set! beam-notes '())))
+       ((beam-interface engraver grob source-engraver)
+        (set! beams (cons grob beams))))
 
       ((finalize engraver)
-       (set! beam-notes '())
-       (set! beam-active #f))
+       (for-each
+        (lambda (beam)
+          (let ((ends (beam-end-note-heads beam)))
+            (when ends
+              (let* ((left-nh (car ends))
+                     (right-nh (cdr ends))
+                     (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
+                (ly:spanner-set-bound! tie LEFT left-nh)
+                (ly:spanner-set-bound! tie RIGHT right-nh)
+                ;; Anchor the arc's Y (and X) coordinate system on the left
+                ;; note head, so the forced control points are interpreted
+                ;; relative to the Sargam letters in EVERY context (single-
+                ;; and multi-staff). Without this the arc inherits an
+                ;; ambiguous Y reference in multi-staff scores and renders
+                ;; far away / off the staff.
+                (ly:grob-set-parent! tie Y left-nh)
+                (ly:grob-set-parent! tie X left-nh)
+                (ly:grob-set-property! tie 'direction DOWN)
+                ;; Forced control points -> bypass broken auto positioning.
+                (ly:grob-set-property! tie 'control-points
+                  (sargam-arc-control-points left-nh right-nh))
+                (ly:engraver-announce-end-grob engraver tie right-nh)))))
+        beams)
+       (set! beams '()))
        )))
 
 #(define (sargamHeadStencil grob)

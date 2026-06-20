@@ -273,18 +273,18 @@ So it creates **exactly one arc per beamed group**, spanning first → last note
 (NOT one tie per adjacent pair).
 
 **Status:** Working for eighth-note pairs (the primary case) in both
-single-staff and multi-staff layouts. Triplets and sixteenths produce arcs but
-still need visual polish (collisions with the 16th underline / octave dots).
+single-staff and multi-staff layouts, for **explicit `[ ]` beams and automatic
+beams**. Triplets and sixteenths produce arcs but still need visual polish
+(collisions with the 16th underline / octave dots).
 
 **How it works:**
 
-1. Collects note heads with event `duration-log >= 3` (eighths, sixteenths,
-   triplet members) **directly in the acknowledger**, while a beam is active.
-2. On the beam's `RIGHT` (end) event it sets `beam-active` to the sentinel
-   `'ending` so the *closing* note of the group (acknowledged in the same
-   timestep) is still captured.
-3. At `stop-translation-timestep` it makes ONE `Tie` grob bound LEFT = first
-   note, RIGHT = last note of the group.
+1. Acknowledges the **`Beam` grob** (not `beam-event`), so it catches both
+   explicit `[ ]` beams and automatic beams (auto-beams emit no beam-event).
+2. Collects every Beam grob seen in the context.
+3. At **`finalize`** (when each beam's stem set is fully populated) it reads the
+   first and last note head of each beam via `stem → 'note-heads` and makes ONE
+   `Tie` grob bound LEFT = first note, RIGHT = last note of the group.
 4. It **anchors the tie's X and Y parent to the left note head**
    (`ly:grob-set-parent!`) and sets explicit **`control-points`**. This bypasses
    LilyPond's automatic tie positioning, which fails in a `line-count = 0`,

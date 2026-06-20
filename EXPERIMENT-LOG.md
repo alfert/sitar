@@ -92,15 +92,30 @@ rendered far away / not under the letters. Fix:
 This makes the arc land under the Sargam letters in **every** layout.
 This was the specific bug behind the old "ties escape to other staves" report.
 
-### ✅ Collect beamed notes in the acknowledger, gated by `beam-active`
+### ✅ Detect groups by acknowledging the Beam GROB, create ties at `finalize`
 
-The closing note of a beamed pair is acknowledged in the **same timestep** as
-the beam's `RIGHT` (end) event. Collecting via `process-acknowledged` raced with
-that event and produced **no ties at all** in the real staff context. Fix:
-collect note heads directly in the `note-head-interface` acknowledger while
-`beam-active`, and on the `RIGHT` event set `beam-active` to the sentinel
-`'ending` (still truthy) so the last note is still captured; draw + reset at
-`stop-translation-timestep`.
+This is the mechanism for finding the groups, and it handles **both explicit
+`[ ]` beams and automatic beams** — which was the whole point.
+
+Earlier attempts listened for `beam-event` (`span-direction` LEFT/RIGHT). That
+only works for **explicit** beams; **auto-beams emit no `beam-event`**, so
+auto-beamed groups got no arc. (Verified: with auto-beams a probe sees a Beam
+*grob* acknowledged but never a `beam-event`.)
+
+Fix: **acknowledge the `Beam` grob** (`beam-interface`). Both explicit and auto
+beams produce a Beam grob whose member **stems** lead to the note heads
+(`stem → 'note-heads`). One arc per Beam grob, bound first→last note head.
+
+Timing detail: an explicit beam's `stems` array is **not fully populated** at
+the `stop-translation-timestep` when the beam first appears (only 1 stem is
+attached then; reading it there gave arcs for auto-beams but **broke explicit
+beams**). Both kinds are complete by **`finalize`**, so we collect all Beam
+grobs during the run and create the ties in `finalize`. Verified working for:
+explicit pairs, auto-beam groups (incl. the 2+4 split LilyPond picks in 4/4),
+explicit 3-note beams, and beams broken by rests.
+
+Helper `beam-end-note-heads` returns `(first-nh . last-nh)` for a beam, or `#f`
+if it has < 2 stems (which also filters out phantom/partial Beam grobs).
 
 ---
 
@@ -108,6 +123,8 @@ collect note heads directly in the `note-head-interface` acknowledger while
 
 - **Eighth-note pairs (2 notes): working** in both single-staff and multi-staff.
   This is the primary target and matches the reference.
+- **Auto-beams now also produce arcs** (via the Beam-grob mechanism), so the
+  normal "let LilyPond beam" workflow works — explicit `[ ]` is not required.
 - **Triplets (3) and sixteenths (4): arcs are produced**, but rendering still
   needs polish — at tight spacing / line-ends the arc can collide with the
   16th-note underline and with octave dots. Not yet refined.
