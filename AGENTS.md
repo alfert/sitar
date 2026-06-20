@@ -241,7 +241,11 @@ duration:
 ### Special Commands
 
 ```lilypond
-\chik      % Sitar stroke notation (tick mark above rest)
+\chik 4    % Chikari stroke of the given duration (a rest played on the drone
+           %   strings). Takes a REQUIRED duration: \chik 4, \chik 8, \chik 16…
+           %   Normal Staff: rest + tick mark above. SargamStaff: the rest is
+           %   replaced by the tick-mark glyph (no dash). Counts toward the
+           %   beat-grouping arc like any other event.
 \tintal    % 16-beat tala cycle (4+4+4+4)
 \jhaptal   % 10-beat tala cycle (2+3+2+3)
 ```

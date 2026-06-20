@@ -10,7 +10,7 @@ raagMhegGatI = \relative S' {
   S 
   % g8 g e d c d 
   
-  Re4 \chik 
+  Re4 \chik 4
   % e4 \chik 
   
   P-> m \glissando Re

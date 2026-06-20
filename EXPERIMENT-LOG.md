@@ -135,9 +135,27 @@ Rest grob** (verified), so the arc spans note→rest, rest→note, etc.
 
 The rest glyph is replaced by an em-dash via `sargamRestStencil`
 (`\override Rest.stencil`), matching the bold letter style. A full-beat (quarter)
-rest is a lone dash with no arc. Note: `\chik` is a quarter rest with a tickmark,
-so it now shows as tickmark-over-dash — which reads correctly as a stroke on an
-empty beat.
+rest is a lone dash with no arc.
+
+### ✅ Chikari stroke (`\chik`): own glyph, any duration
+
+`\chik` is a rest (so it counts in the beat arc) drawn as a tick-mark glyph
+instead of the dash. It takes a **required** duration (`\chik 4`, `\chik 8`,
+`\chik 16`, …) so the stroke can be played at any speed.
+
+- The rest is tagged with a custom grob property `sargam-chik` via `\tweak`
+  (registered with `set-object-property!`). `sargamRestStencil` checks it:
+  chik → tick-mark glyph; otherwise → em-dash.
+- A `^\markup` tick-mark articulation is attached too; it renders **only in a
+  normal Staff** (the SargamStaff/SargamVoice has no Script engraver), so the
+  Sargam side shows the glyph alone with no double mark.
+
+**Gotcha (why required, not optional, duration):** a music function whose only /
+last argument is an optional `ly:duration?` cannot be used without a trailing
+duration token — `{ … \chik }` is a parse error, and `\chik G` mis-binds. So the
+duration is required; the two call sites use `\chik 4`. (Tweaking the
+RestEvent built with `make-music 'RestEvent` also dropped the rest; building it
+as `r $dur` inside `#{ #}` works.)
 
 #### ❌ Earlier dead end: group by beam (`beam-event`, then Beam grob)
 
