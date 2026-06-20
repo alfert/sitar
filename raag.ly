@@ -186,17 +186,42 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
        (set! by-beat '()))
        )))
 
+%% How many trailing beats does a note of @var{dur-log} (whole=0, half=1)
+%% occupy beyond its first beat, ignoring dots? Falls back to dur-log when the
+%% real duration is unavailable.
+#(define (sargam-extra-beats dur length)
+   ;; @var{length} is the note's full duration as a moment-main rational, or #f.
+   (cond
+    ((and length (> length 0))
+     (max 0 (- (inexact->exact (round (/ length sargam-beat-length))) 1)))
+    ((eqv? dur 0) 3)   ; whole note  -> 4 beats
+    ((eqv? dur 1) 1)   ; half note   -> 2 beats
+    (else 0)))
+
+%% A note that lasts longer than one beat is written as the letter followed by
+%% one em-dash per extra beat (S — for a half note, S — — for a dotted half,
+%% S — — — for a whole note), with a little space before the first dash.
+#(define (sargam-duration-postfix-markup n-dashes)
+   (if (<= n-dashes 0)
+       (markup "")
+       (make-line-markup
+         (cons (make-hspace-markup 0.4)
+               (map (lambda (i) (markup "—")) (iota n-dashes))))))
+
 #(define (sargamHeadStencil grob)
    (let* (
           (shape (ly:grob-property grob 'style))
           (dur-log (ly:grob-property grob 'duration-log))
-          (pitch (ly:event-property (event-cause grob) 'pitch))
+          (cause (event-cause grob))
+          (pitch (ly:event-property cause 'pitch))
           (octave (ly:pitch-octave pitch))
           (head (head-name-from-pitch pitch))
-          (postfix (case dur-log
-                      ((0) "---")
-                      ((1) "-")
-                      (else "")))
+          (note-dur (ly:event-property cause 'duration))
+          (note-length (if (ly:duration? note-dur)
+                           (ly:moment-main (ly:duration-length note-dur))
+                           #f))
+          (n-dashes (sargam-extra-beats dur-log note-length))
+          (postfix (sargam-duration-postfix-markup n-dashes))
           (sub (case dur-log
                   ((3) (lambda (m) (make-underline-markup m)))
                   (else (lambda (m) m))))
@@ -210,10 +235,10 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
               (stack-dots (- octave))
               (markup "")))
          (note-number
-          (begin
-           ;(log-exprs head)
-            (make-bold-markup (sub (string-append head postfix))))
-          )
+            ;; letter (with octave underline for 8ths) then the em-dash tail
+            (make-bold-markup
+              (make-line-markup
+                (list (sub head) postfix))))
           )
      (grob-interpret-markup grob
           (make-lower-markup 0.5

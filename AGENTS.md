@@ -222,12 +222,21 @@ Example: A note with 2 dots above is two octaves higher than middle register.
 
 ### Duration Notation in Sargam Staff
 
-The `sargamHeadStencil` function applies visual indicators based on `duration-log`:
+The `sargamHeadStencil` function applies visual indicators based on the note's
+duration:
 
-- **dur-log 3** (eighth notes): Underlined note name
-- **dur-log 1** (half notes): Single dash postfix (`S-`)
-- **dur-log 0** (whole notes): Triple dash postfix (`S---`)
-- **dur-log 2** (quarter notes): No special marking (bold text only)
+- **Eighth notes (dur-log 3):** underlined note name (e.g. `S̲`).
+- **Quarter notes (dur-log 2):** no marking (bold letter only) — one beat.
+- **Notes longer than a beat:** the letter is followed by **one em-dash (—) per
+  extra beat**, with a small space before the first dash. This is computed from
+  the note's *actual* duration (so dots count):
+  - half note `S2` → `S —`
+  - dotted half `S2.` → `S — —`
+  - whole note `S1` → `S — — —`
+
+  This matches the rest dash (a held beat reads the same as a rest beat) and is
+  produced by `sargam-extra-beats` / `sargam-duration-postfix-markup`. Octave
+  dots and the em-dash tail coexist.
 
 ### Special Commands
 

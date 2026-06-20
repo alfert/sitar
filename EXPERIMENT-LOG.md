@@ -160,9 +160,14 @@ of beat bucketing. (Kept here so we don't reintroduce it.)
   and unbeamed notes all behave correctly.
 - **Rests participate** and are drawn as dashes (—); e.g. the last bar of the
   first Gat (`G — G R — R S`) renders like the reference.
+- **Long notes use an em-dash tail**: a note lasting >1 beat is written as the
+  letter + one `—` per extra beat, computed from the note's real duration so
+  dots count (half `S —`, dotted-half `S — —`, whole `S — — —`). Consistent with
+  the rest dash; replaced the old tight hyphen postfix (`S-`, `S---`).
 - Verified: 6 eighths → 3 arcs; 8 eighths → 4 arcs; triplets; sixteenths;
   dotted-8+16; half note (no arc); `\partial` pickup; `\tintal`/`\jhaptal`;
-  note+rest, rest+note, and `— — — S` (3 sixteenth rests + note) beats.
+  note+rest, rest+note, and `— — — S` (3 sixteenth rests + note) beats; long
+  notes with octave dots (dots + em-dash tail coexist).
 - **Triplets (3) and sixteenths (4): arcs are produced**, but rendering still
   needs polish — at tight spacing / line-ends the arc can collide with the
   16th-note underline and with octave dots. Not yet refined.
