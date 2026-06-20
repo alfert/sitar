@@ -13,21 +13,38 @@ never repeat a dead end.
 
 ## What the arc actually means (corrected understanding)
 
-The curved arc under a group of Sargam letters is **not** a musical tie/slur.
-It is a **grouping bracket that encodes the rhythmic subdivision** — the Sargam
-equivalent of a Western beam:
+The curved arc under a group of Sargam letters is **not** a musical tie/slur,
+and it is **not** a copy of LilyPond's beaming. It is a **per-beat grouping
+bracket**:
+
+- **One arc = one beat = one quarter note** of musical time.
+- The number of note heads under the arc shows how that beat is subdivided:
 
 | notes under one arc | meaning      |
 | ------------------- | ------------ |
+| 1                   | (no arc — a plain quarter note) |
 | 2                   | eighth notes |
 | 3                   | triplet      |
 | 4                   | sixteenths   |
+| 5                   | quintuplet   |
 | …                   | …            |
 
-Therefore the engraver draws **exactly one arc per beamed group**, spanning the
-whole group (first note → last note). The *count* of letters under the arc
-communicates the rhythm. (Reference: Josh Feinburg, "Composition in
-Medium-Fast Tintal", `raag-yaman-kalyan-original.jpeg`.)
+So notes are grouped by **which beat they start in**; a beat containing 2+ note
+heads gets a single arc spanning its first→last note. A beat with one note (a
+quarter, or a longer note that starts the beat) gets no arc.
+
+This is **independent of beaming**. Example: in 4/4, `M8 M P P D D` is one beam
+of six eighths in the Melody staff, but rhythmically it is **3 beats** → **3
+arcs** (M-M, P-P, D-D). Grouping by beam (an earlier mistake) drew one wrong arc
+over all six.
+
+(References: `sargam-rhythm.jpeg` — the definitive rule, "Rhythmic Notation",
+and `raag-yaman-kalyan-original.jpeg`. Josh Feinburg, sitar method.)
+
+Beat length is fixed at a quarter note (`sargam-beat-length = 1/4`). Beat index
+of a note = `floor(absoluteMoment / 1/4)`, which keeps partial measures
+(`\partial`) and compound talas (`\tintal`, `\jhaptal`) correct because the
+absolute clock is shared by all notes.
 
 The up/down stroke marks (bols, the `^` / `v` row under the letters) are a
 **separate** feature, not yet implemented.
@@ -92,39 +109,42 @@ rendered far away / not under the letters. Fix:
 This makes the arc land under the Sargam letters in **every** layout.
 This was the specific bug behind the old "ties escape to other staves" report.
 
-### ✅ Detect groups by acknowledging the Beam GROB, create ties at `finalize`
+### ✅ Group by BEAT (current mechanism)
 
-This is the mechanism for finding the groups, and it handles **both explicit
-`[ ]` beams and automatic beams** — which was the whole point.
+The arc is per-beat, so the engraver does **not** look at beams at all. As each
+note head is acknowledged, it is bucketed by the beat it starts in:
 
-Earlier attempts listened for `beam-event` (`span-direction` LEFT/RIGHT). That
-only works for **explicit** beams; **auto-beams emit no `beam-event`**, so
-auto-beamed groups got no arc. (Verified: with auto-beams a probe sees a Beam
-*grob* acknowledged but never a `beam-event`.)
+```scheme
+(beat (inexact->exact (floor (/ (ly:moment-main (ly:context-current-moment context))
+                                1/4))))
+```
 
-Fix: **acknowledge the `Beam` grob** (`beam-interface`). Both explicit and auto
-beams produce a Beam grob whose member **stems** lead to the note heads
-(`stem → 'note-heads`). One arc per Beam grob, bound first→last note head.
+At `finalize`, every beat bucket with **2+ note heads** gets one arc bound
+first→last note head of that bucket. Verified: 6 eighths in 4/4 → 3 arcs;
+8 eighths → 4 arcs; triplet/sixteenth buckets; dotted-8 + 16 per beat; half note
+gets no arc; `\partial` pickup beat; `\tintal` and `\jhaptal` talas; multi-staff.
 
-Timing detail: an explicit beam's `stems` array is **not fully populated** at
-the `stop-translation-timestep` when the beam first appears (only 1 stem is
-attached then; reading it there gave arcs for auto-beams but **broke explicit
-beams**). Both kinds are complete by **`finalize`**, so we collect all Beam
-grobs during the run and create the ties in `finalize`. Verified working for:
-explicit pairs, auto-beam groups (incl. the 2+4 split LilyPond picks in 4/4),
-explicit 3-note beams, and beams broken by rests.
+#### ❌ Earlier dead end: group by beam (`beam-event`, then Beam grob)
 
-Helper `beam-end-note-heads` returns `(first-nh . last-nh)` for a beam, or `#f`
-if it has < 2 stems (which also filters out phantom/partial Beam grobs).
+First we listened for `beam-event` (LEFT/RIGHT) — works only for explicit `[ ]`
+beams; **auto-beams emit no `beam-event`**. Then we acknowledged the **Beam
+grob** instead (handles both beam kinds via `stem → 'note-heads`, reading at
+`finalize` because explicit beams' stems attach incrementally).
+
+Both were **musically wrong**: a beam can cover several beats (e.g. 6 eighths
+under one beam in 4/4), but the arc must be **one per beat**. Abandoned in favor
+of beat bucketing. (Kept here so we don't reintroduce it.)
 
 ---
 
 ## Current status
 
-- **Eighth-note pairs (2 notes): working** in both single-staff and multi-staff.
-  This is the primary target and matches the reference.
-- **Auto-beams now also produce arcs** (via the Beam-grob mechanism), so the
-  normal "let LilyPond beam" workflow works — explicit `[ ]` is not required.
+- **Per-beat arcs: working** in single-staff and multi-staff. One arc per beat
+  (quarter note); the note count under it is the subdivision. Matches
+  `sargam-rhythm.jpeg`. Independent of beaming, so auto-beams, explicit beams,
+  and unbeamed notes all behave correctly.
+- Verified: 6 eighths → 3 arcs; 8 eighths → 4 arcs; triplets; sixteenths;
+  dotted-8+16; half note (no arc); `\partial` pickup; `\tintal`/`\jhaptal`.
 - **Triplets (3) and sixteenths (4): arcs are produced**, but rendering still
   needs polish — at tight spacing / line-ends the arc can collide with the
   16th-note underline and with octave dots. Not yet refined.

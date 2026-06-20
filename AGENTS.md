@@ -259,33 +259,35 @@ The `sargamHeadStencil` function applies visual indicators based on `duration-lo
 
 ### Sargam_beam_tie_engraver (raag.ly, defined just before `sargamHeadStencil`)
 
-**Purpose:** Draws the **rhythmic grouping arc** under each beamed group of
-Sargam letters. The arc is the Sargam equivalent of a Western beam, and the
-**number of letters under one arc encodes the subdivision**:
+**Purpose:** Draws the **rhythmic grouping arc** under the Sargam letters.
+**One arc = one beat (one quarter note).** The **number of letters under one arc
+encodes the subdivision of that beat**:
 
 | notes under one arc | meaning      |
 | ------------------- | ------------ |
+| 1                   | (no arc — plain quarter note) |
 | 2                   | eighth notes |
 | 3                   | triplet      |
 | 4                   | sixteenths   |
 
-So it creates **exactly one arc per beamed group**, spanning first → last note
-(NOT one tie per adjacent pair).
+This is **independent of beaming**. In 4/4, `M8 M P P D D` is one 6-note beam but
+**three beats**, so it draws **three arcs** (M-M, P-P, D-D). See
+`sargam-rhythm.jpeg` for the authoritative rule. (The engraver name is now a
+misnomer — it groups by beat, not beam — kept for git history continuity.)
 
-**Status:** Working for eighth-note pairs (the primary case) in both
-single-staff and multi-staff layouts, for **explicit `[ ]` beams and automatic
-beams**. Triplets and sixteenths produce arcs but still need visual polish
-(collisions with the 16th underline / octave dots).
+**Status:** Working in single-staff and multi-staff. Triplets and sixteenths
+produce arcs but still need visual polish (collisions with the 16th underline /
+octave dots).
 
 **How it works:**
 
-1. Acknowledges the **`Beam` grob** (not `beam-event`), so it catches both
-   explicit `[ ]` beams and automatic beams (auto-beams emit no beam-event).
-2. Collects every Beam grob seen in the context.
-3. At **`finalize`** (when each beam's stem set is fully populated) it reads the
-   first and last note head of each beam via `stem → 'note-heads` and makes ONE
-   `Tie` grob bound LEFT = first note, RIGHT = last note of the group.
-4. It **anchors the tie's X and Y parent to the left note head**
+1. As each note head is acknowledged, bucket it by the beat it starts in:
+   `beat = floor(absoluteMoment / 1/4)` (beat length = quarter note,
+   `sargam-beat-length`). Using the **absolute** moment keeps `\partial` pickups
+   and compound talas (`\tintal`, `\jhaptal`) correct.
+2. At **`finalize`**, every beat bucket with **2+ note heads** gets ONE `Tie`
+   grob bound LEFT = first, RIGHT = last note head of that beat.
+3. It **anchors the tie's X and Y parent to the left note head**
    (`ly:grob-set-parent!`) and sets explicit **`control-points`**. This bypasses
    LilyPond's automatic tie positioning, which fails in a `line-count = 0`,
    pitch-squashed staff. Without the forced parents/control-points the arc is
@@ -305,7 +307,7 @@ binds to note heads and renders. See `EXPERIMENT-LOG.md`.
 **Visual example:**
 
 ```lilypond
-{ G4 M8[ M] P8[ P] D8[ D] }   % three 2-note groups -> three arcs (eighths)
+{ \time 4/4 G4 M8 M P P D D }   % beats 2,3,4 each hold 2 eighths -> three arcs
 ```
 
 ```

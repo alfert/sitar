@@ -124,50 +124,44 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
            (cons (+ a (* span 0.75)) dip)
            (cons b top))))
 
-%% Return the first note head of a stem grob (or #f).
-#(define (stem-first-note-head stem)
-   (let ((heads (ly:grob-object stem 'note-heads #f)))
-     (if (and heads (ly:grob-array? heads) (> (ly:grob-array-length heads) 0))
-         (ly:grob-array-ref heads 0)
-         #f)))
+%% One beat = one quarter note. The grouping arc spans exactly one beat; the
+%% number of note heads under it shows the subdivision of that beat
+%% (2 = eighths, 3 = triplet, 4 = sixteenths, ...). A beat with a single note
+%% gets no arc. This follows the Sargam rhythmic notation (sargam-rhythm.jpeg)
+%% and is independent of how LilyPond happens to beam the notes.
+#(define sargam-beat-length 1/4)
 
-%% Given a Beam grob, return (first-note-head . last-note-head) of the group,
-%% or #f if it cannot be determined. Works for BOTH explicit [ ] beams and
-%% automatic beams, because both produce a Beam grob with member stems.
-#(define (beam-end-note-heads beam)
-   (let ((stems (ly:grob-object beam 'stems #f)))
-     (if (and stems (ly:grob-array? stems) (> (ly:grob-array-length stems) 1))
-         (let* ((lst (ly:grob-array->list stems))
-                (first-nh (stem-first-note-head (car lst)))
-                (last-nh (stem-first-note-head (car (last-pair lst)))))
-           (if (and first-nh last-nh)
-               (cons first-nh last-nh)
-               #f))
-         #f)))
+%% Which beat does musical moment @var{m} (a rational) fall in?
+#(define (sargam-beat-index m)
+   (inexact->exact (floor (/ m sargam-beat-length))))
 
 #(define (Sargam_beam_tie_engraver context)
-   "Creates one grouping arc spanning each beamed group of Sargam notes.
-    The number of notes under the arc encodes the subdivision
-    (2 = eighths, 3 = triplet, 4 = sixteenths, ...).
-
-    Works for explicit [ ] beams AND automatic beams: instead of listening
-    for beam-events (which only explicit beams emit) we acknowledge the Beam
-    GROB itself and, at finalize, read its first/last note heads from its
-    member stems. We must wait until finalize because an explicit beam's
-    stem set is only fully populated after its closing note is processed."
-   (let ((beams '()))   ; every Beam grob seen in this context
+   "Draws one grouping arc per BEAT (quarter note). Note heads are bucketed by
+    the beat they start in; any beat containing two or more note heads gets a
+    single arc spanning its first..last note head. The arc is the Sargam
+    equivalent of subdivision marks, NOT a copy of LilyPond's beaming."
+   ;; Association list: beat-index -> list of note heads (in encounter order).
+   (let ((by-beat '()))
      (make-engraver
       (acknowledgers
-       ((beam-interface engraver grob source-engraver)
-        (set! beams (cons grob beams))))
+       ((note-head-interface engraver grob source-engraver)
+        ;; Bucket each note head by the beat in which it starts. Rests have no
+        ;; note head, so they naturally break a beat's group (and a new beat
+        ;; bucket starts after them).
+        (let* ((now (ly:moment-main (ly:context-current-moment context)))
+               (beat (sargam-beat-index now))
+               (entry (assv beat by-beat)))
+          (if entry
+              (set-cdr! entry (cons grob (cdr entry)))
+              (set! by-beat (cons (list beat grob) by-beat))))))
 
       ((finalize engraver)
        (for-each
-        (lambda (beam)
-          (let ((ends (beam-end-note-heads beam)))
-            (when ends
-              (let* ((left-nh (car ends))
-                     (right-nh (cdr ends))
+        (lambda (entry)
+          (let ((heads (reverse (cdr entry))))   ; chronological order
+            (when (>= (length heads) 2)
+              (let* ((left-nh (car heads))
+                     (right-nh (car (last-pair heads)))
                      (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
                 (ly:spanner-set-bound! tie LEFT left-nh)
                 (ly:spanner-set-bound! tie RIGHT right-nh)
@@ -184,8 +178,8 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
                 (ly:grob-set-property! tie 'control-points
                   (sargam-arc-control-points left-nh right-nh))
                 (ly:engraver-announce-end-grob engraver tie right-nh)))))
-        beams)
-       (set! beams '()))
+        by-beat)
+       (set! by-beat '()))
        )))
 
 #(define (sargamHeadStencil grob)
