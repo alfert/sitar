@@ -135,49 +135,53 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
 #(define (sargam-beat-index m)
    (inexact->exact (floor (/ m sargam-beat-length))))
 
-#(define (Sargam_beam_tie_engraver context)
-   "Draws one grouping arc per BEAT (quarter note). Note heads are bucketed by
-    the beat they start in; any beat containing two or more note heads gets a
-    single arc spanning its first..last note head. The arc is the Sargam
-    equivalent of subdivision marks, NOT a copy of LilyPond's beaming."
-   ;; Association list: beat-index -> list of note heads (in encounter order).
+#(define (Sargam_beat_arc_engraver context)
+   "Draws one grouping arc per BEAT (quarter note). Note heads AND rests are
+    bucketed by the beat they start in; any beat containing two or more events
+    gets a single arc spanning its first..last event. Rests count as members of
+    the beat (a beat of `S8 r8` is two subdivisions, so it is arced), matching
+    the Sargam rhythmic notation. The arc is NOT a copy of LilyPond's beaming."
+   ;; Association list: beat-index -> list of grobs (note heads or rests).
    (let ((by-beat '()))
+     ;; File @var{grob} into the bucket for the beat it starts in.
+     (define (bucket! grob)
+       (let* ((beat (sargam-beat-index
+                      (ly:moment-main (ly:context-current-moment context))))
+              (entry (assv beat by-beat)))
+         (if entry
+             (set-cdr! entry (cons grob (cdr entry)))
+             (set! by-beat (cons (list beat grob) by-beat)))))
      (make-engraver
       (acknowledgers
+       ;; A note head OR a rest occupies a subdivision of its beat.
        ((note-head-interface engraver grob source-engraver)
-        ;; Bucket each note head by the beat in which it starts. Rests have no
-        ;; note head, so they naturally break a beat's group (and a new beat
-        ;; bucket starts after them).
-        (let* ((now (ly:moment-main (ly:context-current-moment context)))
-               (beat (sargam-beat-index now))
-               (entry (assv beat by-beat)))
-          (if entry
-              (set-cdr! entry (cons grob (cdr entry)))
-              (set! by-beat (cons (list beat grob) by-beat))))))
+        (bucket! grob))
+       ((rest-interface engraver grob source-engraver)
+        (bucket! grob)))
 
       ((finalize engraver)
        (for-each
         (lambda (entry)
-          (let ((heads (reverse (cdr entry))))   ; chronological order
-            (when (>= (length heads) 2)
-              (let* ((left-nh (car heads))
-                     (right-nh (car (last-pair heads)))
-                     (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
-                (ly:spanner-set-bound! tie LEFT left-nh)
-                (ly:spanner-set-bound! tie RIGHT right-nh)
+          (let ((members (reverse (cdr entry))))   ; chronological order
+            (when (>= (length members) 2)
+              (let* ((left (car members))
+                     (right (car (last-pair members)))
+                     (tie (ly:engraver-make-grob engraver 'Tie left)))
+                (ly:spanner-set-bound! tie LEFT left)
+                (ly:spanner-set-bound! tie RIGHT right)
                 ;; Anchor the arc's Y (and X) coordinate system on the left
-                ;; note head, so the forced control points are interpreted
+                ;; member, so the forced control points are interpreted
                 ;; relative to the Sargam letters in EVERY context (single-
                 ;; and multi-staff). Without this the arc inherits an
                 ;; ambiguous Y reference in multi-staff scores and renders
                 ;; far away / off the staff.
-                (ly:grob-set-parent! tie Y left-nh)
-                (ly:grob-set-parent! tie X left-nh)
+                (ly:grob-set-parent! tie Y left)
+                (ly:grob-set-parent! tie X left)
                 (ly:grob-set-property! tie 'direction DOWN)
                 ;; Forced control points -> bypass broken auto positioning.
                 (ly:grob-set-property! tie 'control-points
-                  (sargam-arc-control-points left-nh right-nh))
-                (ly:engraver-announce-end-grob engraver tie right-nh)))))
+                  (sargam-arc-control-points left right))
+                (ly:engraver-announce-end-grob engraver tie right)))))
         by-beat)
        (set! by-beat '()))
        )))
@@ -217,6 +221,16 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
           ))))
 
 
+%% A rest in Sargam notation is written as a dash (—), per the rhythmic
+%% notation rules. It sits in the same baseline as the note letters and, like a
+%% note, counts as one subdivision of its beat (so it can sit under a grouping
+%% arc). We render an em-dash in the same bold style as the letters.
+#(define (sargamRestStencil grob)
+   (grob-interpret-markup grob
+     (make-lower-markup 0.5
+       (make-bold-markup "—"))))
+
+
 \layout {
   \context {
     \name SargamVoice
@@ -249,6 +263,8 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     \accepts Voice
     \accepts SargamVoice
     \override NoteHead.stencil =  #(lambda (grob) (sargamHeadStencil grob))
+    %% Rests are drawn as a dash (—) in Sargam notation.
+    \override Rest.stencil =  #(lambda (grob) (sargamRestStencil grob))
 
     %% all RhythmicStaff Engraver
     \consists Axis_group_engraver
@@ -267,11 +283,11 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     \consists Beam_engraver
     \consists Auto_beam_engraver
 
-    %% Rhythmic grouping arcs below beamed note groups.
-    %% Tie_engraver is needed so the 'Tie grobs we create are collected
-    %% and drawn; Sargam_beam_tie_engraver supplies one arc per beam group.
+    %% Rhythmic grouping arcs: ONE arc per beat (quarter note); notes and rests
+    %% in the same beat sit under one arc. Tie_engraver is needed so the 'Tie
+    %% grobs we create are collected and drawn.
     \consists Tie_engraver
-    \consists #Sargam_beam_tie_engraver
+    \consists #Sargam_beat_arc_engraver
 
     \alias RhythmicStaff
   }

@@ -111,18 +111,33 @@ This was the specific bug behind the old "ties escape to other staves" report.
 
 ### ✅ Group by BEAT (current mechanism)
 
-The arc is per-beat, so the engraver does **not** look at beams at all. As each
-note head is acknowledged, it is bucketed by the beat it starts in:
+Engraver: `Sargam_beat_arc_engraver`. The arc is per-beat, so it does **not**
+look at beams at all. As each note head **or rest** is acknowledged, it is
+bucketed by the beat it starts in:
 
 ```scheme
 (beat (inexact->exact (floor (/ (ly:moment-main (ly:context-current-moment context))
                                 1/4))))
 ```
 
-At `finalize`, every beat bucket with **2+ note heads** gets one arc bound
-first→last note head of that bucket. Verified: 6 eighths in 4/4 → 3 arcs;
+At `finalize`, every beat bucket with **2+ events** gets one arc bound
+first→last event of that bucket. Verified: 6 eighths in 4/4 → 3 arcs;
 8 eighths → 4 arcs; triplet/sixteenth buckets; dotted-8 + 16 per beat; half note
 gets no arc; `\partial` pickup beat; `\tintal` and `\jhaptal` talas; multi-staff.
+
+### ✅ Rests participate in the arc, rendered as a dash (—)
+
+Per `sargam-rhythm.jpeg`, a rest is one subdivision of its beat: `S8 r8` is two
+subdivisions and is arced (`S —`); `r16 r16 r16 S16` is four subdivisions
+(`— — — S`). So the engraver **also acknowledges `rest-interface`** grobs and
+buckets them by beat exactly like note heads. A **`Tie` can bind LEFT/RIGHT to a
+Rest grob** (verified), so the arc spans note→rest, rest→note, etc.
+
+The rest glyph is replaced by an em-dash via `sargamRestStencil`
+(`\override Rest.stencil`), matching the bold letter style. A full-beat (quarter)
+rest is a lone dash with no arc. Note: `\chik` is a quarter rest with a tickmark,
+so it now shows as tickmark-over-dash — which reads correctly as a stroke on an
+empty beat.
 
 #### ❌ Earlier dead end: group by beam (`beam-event`, then Beam grob)
 
@@ -140,11 +155,14 @@ of beat bucketing. (Kept here so we don't reintroduce it.)
 ## Current status
 
 - **Per-beat arcs: working** in single-staff and multi-staff. One arc per beat
-  (quarter note); the note count under it is the subdivision. Matches
+  (quarter note); the event count under it is the subdivision. Matches
   `sargam-rhythm.jpeg`. Independent of beaming, so auto-beams, explicit beams,
   and unbeamed notes all behave correctly.
+- **Rests participate** and are drawn as dashes (—); e.g. the last bar of the
+  first Gat (`G — G R — R S`) renders like the reference.
 - Verified: 6 eighths → 3 arcs; 8 eighths → 4 arcs; triplets; sixteenths;
-  dotted-8+16; half note (no arc); `\partial` pickup; `\tintal`/`\jhaptal`.
+  dotted-8+16; half note (no arc); `\partial` pickup; `\tintal`/`\jhaptal`;
+  note+rest, rest+note, and `— — — S` (3 sixteenth rests + note) beats.
 - **Triplets (3) and sixteenths (4): arcs are produced**, but rendering still
   needs polish — at tight spacing / line-ends the arc can collide with the
   16th-note underline and with octave dots. Not yet refined.
@@ -194,7 +212,7 @@ Enable it (the snippet above) when we implement meend/glissando.
 ```bash
 cd sitar
 lilypond raag-yaman-kalyan.ly && open raag-yaman-kalyan.pdf   # multi-staff
-lilypond beam-tie-test.ly      && open beam-tie-test.pdf      # single-staff cases
+lilypond beat-arc-test.ly      && open beat-arc-test.pdf      # single-staff cases
 ```
 
 Look for one arc under each beamed group; the number of letters under the arc

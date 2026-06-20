@@ -3,7 +3,7 @@
 \include "../paper.ily"
 \include "raag.ly"
 
-%% Test cases for beamed eighth note ties
+%% Test cases for the per-beat grouping arc (Sargam_beat_arc_engraver)
 
 testSimplePair = \relative S' {
   % Simple pair of beamed eighth notes
@@ -126,6 +126,6 @@ textRests = \lyricmode {
 }
 
 \header {
-  title = "Sargam Beam Tie Engraver Test Suite"
-  subtitle = "Testing curved ties below beamed eighth notes"
+  title = "Sargam Beat-Arc Engraver Test Suite"
+  subtitle = "One grouping arc per beat; note count = subdivision (rests count too)"
 }

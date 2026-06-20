@@ -257,41 +257,45 @@ The `sargamHeadStencil` function applies visual indicators based on `duration-lo
 > For the design history, dead ends, and the *why* behind the current
 > implementation, see `EXPERIMENT-LOG.md`.
 
-### Sargam_beam_tie_engraver (raag.ly, defined just before `sargamHeadStencil`)
+### Sargam_beat_arc_engraver (raag.ly, defined just before `sargamHeadStencil`)
 
 **Purpose:** Draws the **rhythmic grouping arc** under the Sargam letters.
-**One arc = one beat (one quarter note).** The **number of letters under one arc
-encodes the subdivision of that beat**:
+**One arc = one beat (one quarter note).** The **number of events under one arc
+encodes the subdivision of that beat** — and **rests count as events** (a rest
+is drawn as a dash `—` and sits under the arc, just like a note):
 
-| notes under one arc | meaning      |
-| ------------------- | ------------ |
-| 1                   | (no arc — plain quarter note) |
-| 2                   | eighth notes |
-| 3                   | triplet      |
-| 4                   | sixteenths   |
+| events under one arc | meaning      |
+| -------------------- | ------------ |
+| 1                    | (no arc — plain quarter note or full-beat rest) |
+| 2                    | eighth notes (note+note, note+rest, …) |
+| 3                    | triplet      |
+| 4                    | sixteenths   |
 
 This is **independent of beaming**. In 4/4, `M8 M P P D D` is one 6-note beam but
-**three beats**, so it draws **three arcs** (M-M, P-P, D-D). See
-`sargam-rhythm.jpeg` for the authoritative rule. (The engraver name is now a
-misnomer — it groups by beat, not beam — kept for git history continuity.)
+**three beats**, so it draws **three arcs** (M-M, P-P, D-D). And `G8 r8` is one
+beat with two subdivisions, so it is arced (`G —`). See `sargam-rhythm.jpeg` for
+the authoritative rule.
 
-**Status:** Working in single-staff and multi-staff. Triplets and sixteenths
-produce arcs but still need visual polish (collisions with the 16th underline /
-octave dots).
+**Status:** Working in single-staff and multi-staff, including rests. Triplets
+and sixteenths produce arcs but still need visual polish (collisions with the
+16th underline / octave dots).
 
 **How it works:**
 
-1. As each note head is acknowledged, bucket it by the beat it starts in:
-   `beat = floor(absoluteMoment / 1/4)` (beat length = quarter note,
+1. As each **note head OR rest** is acknowledged, bucket it by the beat it
+   starts in: `beat = floor(absoluteMoment / 1/4)` (beat length = quarter note,
    `sargam-beat-length`). Using the **absolute** moment keeps `\partial` pickups
    and compound talas (`\tintal`, `\jhaptal`) correct.
-2. At **`finalize`**, every beat bucket with **2+ note heads** gets ONE `Tie`
-   grob bound LEFT = first, RIGHT = last note head of that beat.
-3. It **anchors the tie's X and Y parent to the left note head**
+2. At **`finalize`**, every beat bucket with **2+ events** gets ONE `Tie`
+   grob bound LEFT = first, RIGHT = last event of that beat (a bound may be a
+   note head or a rest — a Tie can bind to either).
+3. It **anchors the tie's X and Y parent to the left event**
    (`ly:grob-set-parent!`) and sets explicit **`control-points`**. This bypasses
    LilyPond's automatic tie positioning, which fails in a `line-count = 0`,
    pitch-squashed staff. Without the forced parents/control-points the arc is
    invisible or escapes to another staff.
+
+Rests are rendered as a dash via `sargamRestStencil` (`\override Rest.stencil`).
 
 **Why a Tie and not a Slur:** in this context a manual Slur is invisible (slurs
 attach to a `NoteColumn`, which `SargamVoice` does not create), while a Tie
@@ -301,7 +305,7 @@ binds to note heads and renders. See `EXPERIMENT-LOG.md`.
 
 ```lilypond
 \consists Tie_engraver            % collects/draws the Tie grobs we create
-\consists #Sargam_beam_tie_engraver
+\consists #Sargam_beat_arc_engraver
 ```
 
 **Visual example:**
@@ -389,7 +393,7 @@ Custom layout modifications are defined in `raag.ly` (the `\layout` block near t
   \context {
     \SargamStaff
     \consists Tie_engraver
-    \consists #Sargam_beam_tie_engraver
+    \consists #Sargam_beat_arc_engraver
   }
 }
 ```
