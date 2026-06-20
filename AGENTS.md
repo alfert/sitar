@@ -206,7 +206,7 @@ code | % Inline explanation after code
 
 ### Custom Note Heads
 
-Note heads are rendered via the `sargamHeadStencil` function (raag.ly:233-265), which:
+Note heads are rendered via the `sargamHeadStencil` function (raag.ly:196), which:
 
 - Displays Sargam letter names (S, R, G, M, P, D, N) instead of traditional note heads
 - Adds octave dots above/below note names
@@ -239,13 +239,13 @@ The `sargamHeadStencil` function applies visual indicators based on `duration-lo
 
 ### Custom Contexts
 
-**SargamVoice** (raag.ly:270-283)
+**SargamVoice** (raag.ly:233)
 
 - Voice context with pitch squashing and slash-style note heads
 - Hidden stems, consists of Note_heads_engraver and Text_engraver
 - Aliased to standard Voice for compatibility
 
-**SargamStaff** (raag.ly:289-327)
+**SargamStaff** (raag.ly:253)
 
 - Staff with no staff lines (`line-count = #0`)
 - Custom bar extent for visibility
@@ -254,107 +254,63 @@ The `sargamHeadStencil` function applies visual indicators based on `duration-lo
 
 ## Custom Engravers (Brief Documentation)
 
-### Voice_line_engraver (raag.ly:85-145)
+> For the design history, dead ends, and the *why* behind the current
+> implementation, see `EXPERIMENT-LOG.md`.
 
-**Purpose:** Automatically connects consecutive note heads with slur-like lines to visualize meend (glissando/portamento) in Indian music. **Now modified to skip beamed eighth notes** to avoid conflicts with the Sargam_beam_tie_engraver.
+### Sargam_beam_tie_engraver (raag.ly, defined just before `sargamHeadStencil`)
 
-**How it works:**
+**Purpose:** Draws the **rhythmic grouping arc** under each beamed group of
+Sargam letters. The arc is the Sargam equivalent of a Western beam, and the
+**number of letters under one arc encodes the subdivision**:
 
-1. Tracks beam events to know when notes are inside a beam span
-2. Acknowledges note heads via `note-head-interface`, but **skips beamed eighth notes** (dur-log = 3)
-3. For non-beamed notes: ends the previous follower on current note head
-4. Creates a new Slur grob starting from current note head
-5. Records the expected end moment based on note duration
-6. If no note head appears at expected end (e.g., rest), removes the follower via `ly:grob-suicide!`
+| notes under one arc | meaning      |
+| ------------------- | ------------ |
+| 2                   | eighth notes |
+| 3                   | triplet      |
+| 4                   | sixteenths   |
 
-**Usage in layout:**
+So it creates **exactly one arc per beamed group**, spanning first → last note
+(NOT one tie per adjacent pair).
 
-```lilypond
-\layout {
-  \context {
-    \Voice
-    \consists #Voice_line_engraver
-  }
-}
-```
-
-**Interaction with Sargam_beam_tie_engraver:**
-- Voice lines: Created for **non-beamed notes** (meend/glissando connections)
-- Ties: Created for **beamed eighth notes** by Sargam_beam_tie_engraver
-- No overlap or conflict between the two systems
-
-**Caution:** This engraver is fragile and depends on precise timing. Modifications can break note head connections. Test thoroughly after changes.
-
-### Remove_voice_line_when_slur_engraver (raag.ly:131-189)
-
-**Purpose:** Removes automatic voice lines when explicit slurs are present, preventing visual clutter and giving user control.
+**Status:** Working for eighth-note pairs (the primary case) in both
+single-staff and multi-staff layouts. Triplets and sixteenths produce arcs but
+still need visual polish (collisions with the 16th underline / octave dots).
 
 **How it works:**
 
-1. Acknowledges both voice followers (Slur grobs from Voice_line_engraver) and explicit slur-interface grobs
-2. Tracks which followers/slurs are active in previous and current timesteps
-3. If both a voice follower and explicit slur were active in the previous timestep, calls `ly:grob-suicide!` on the voice follower
-4. Uses careful bookkeeping of `previous-*` variables to handle the one-timestep delay in LilyPond's engraver lifecycle
+1. Collects note heads with event `duration-log >= 3` (eighths, sixteenths,
+   triplet members) **directly in the acknowledger**, while a beam is active.
+2. On the beam's `RIGHT` (end) event it sets `beam-active` to the sentinel
+   `'ending` so the *closing* note of the group (acknowledged in the same
+   timestep) is still captured.
+3. At `stop-translation-timestep` it makes ONE `Tie` grob bound LEFT = first
+   note, RIGHT = last note of the group.
+4. It **anchors the tie's X and Y parent to the left note head**
+   (`ly:grob-set-parent!`) and sets explicit **`control-points`**. This bypasses
+   LilyPond's automatic tie positioning, which fails in a `line-count = 0`,
+   pitch-squashed staff. Without the forced parents/control-points the arc is
+   invisible or escapes to another staff.
 
-**Usage in layout:**
+**Why a Tie and not a Slur:** in this context a manual Slur is invisible (slurs
+attach to a `NoteColumn`, which `SargamVoice` does not create), while a Tie
+binds to note heads and renders. See `EXPERIMENT-LOG.md`.
 
-```lilypond
-\layout {
-  \context {
-    \Voice
-    \consists #Voice_line_engraver
-    \consists #Remove_voice_line_when_slur_engraver
-  }
-}
-```
-
-**Status:** Currently commented out in default SargamVoice layout (raag.ly:281)
-
-### Sargam_beam_tie_engraver (raag.ly:200-264)
-
-**Purpose:** [ACTIVE] Automatically creates curved ties below beamed eighth notes in Sargam notation to visually connect grouped notes.
-
-**Status:** Fully implemented and working. This engraver is now active in the SargamVoice context.
-
-**How it works:**
-
-1. Listens for beam start and end events
-2. Collects note heads that occur during beam spans (only eighth notes with dur-log = 3)
-3. When a beam ends, creates Tie grobs connecting consecutive note heads
-4. Forces tie direction downward (below the note names)
-5. Positions ties just below the underlined note names
-
-**Implementation details:**
-
-- Only processes eighth notes (duration-log = 3)
-- Creates native LilyPond Tie grobs with curved appearance
-- Ties are positioned at `staff-position = -1.5` by default
-- Works seamlessly with Voice_line_engraver (no conflicts)
-
-**Usage in layout:**
+**Layout wiring** (already set in `raag.ly`'s `SargamStaff` context):
 
 ```lilypond
-\layout {
-  \context {
-    \SargamVoice
-    \consists Tie_engraver
-    \consists #Sargam_beam_tie_engraver
-    \override Tie.direction = #DOWN
-    \override Tie.staff-position = #-1.5
-  }
-}
+\consists Tie_engraver            % collects/draws the Tie grobs we create
+\consists #Sargam_beam_tie_engraver
 ```
 
 **Visual example:**
 
 ```lilypond
-{ S8[ Re G M] }  % Creates three ties: S-Re, Re-G, G-M
+{ G4 M8[ M] P8[ P] D8[ D] }   % three 2-note groups -> three arcs (eighths)
 ```
 
-**Result:** Underlined eighth notes with curved ties below each pair:
 ```
-S̲ R̲e̲ Ḡ M̲
- ⌣  ⌣  ⌣
+G   M M   P P   D D
+   ⌣     ⌣     ⌣
 ```
 
 ### Testing After Engraver Modifications
@@ -424,14 +380,14 @@ Common transpositions maintain Sargam logic while fitting instrument ranges.
 
 ### Layout Overrides
 
-Custom layout modifications are defined in `raag.ly` (lines 268-327). Use existing patterns as templates:
+Custom layout modifications are defined in `raag.ly` (the `\layout` block near the end). Use existing patterns as templates:
 
 ```lilypond
 \layout {
   \context {
-    \Voice
-    \consists #Voice_line_engraver
-    \override VoiceFollower.style = #'dashed-line
+    \SargamStaff
+    \consists Tie_engraver
+    \consists #Sargam_beam_tie_engraver
   }
 }
 ```

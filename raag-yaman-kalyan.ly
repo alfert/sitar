@@ -14,16 +14,7 @@ textI = \lyricmode {
   G G Re G M M P P D D G Re P P M M Gr G Re  Re S |
 }
 
-\layout {
-  \context {
-    \Voice
-    %\consists #Voice_line_engraver
-    %\consists #Remove_voice_line_when_slur_engraver
-    %\override VoiceFollower.style = #'slur
-    %\slurDashed
-    }
-  }
-  
+
 \score {
   <<
     \new Staff {
@@ -34,18 +25,9 @@ textI = \lyricmode {
         \melodyGatI 
       }
     }
-%     \new Staff {
-%       \set Staff.instrumentName = "Sargam Voice"
-%       \key D \major
-%       \transpose S Re {
-%         \tintal
-%         \new SargamVoice {
-%           \melodyGatI 
-%         }
-%       }
-%     }
-    \new SargamStaff = "my fist sargam staff" {
-      \set SargamStaff.instrumentName = "Sargam Staff"
+%
+    \new SargamStaff = "sargam" {
+      \set SargamStaff.instrumentName = "Sargam"
       \key D \major
       
         \tintal

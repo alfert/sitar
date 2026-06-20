@@ -84,33 +84,70 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
 
 
 
-%%% 
-%%% Beaming könnte über die Markup-Kommandos \tie gehen,
-%%% Ebenso Slides / Pulloffs mit \overtie
-%%% Auch dieser Ansatz könnte eine Vorlage sein, weil Noten automatisch
-%%% miteinander verbunden werden (durch Linien, hier wären es die Ties)
-%%% https://extending-lilypond.gitlab.io/en/extending/translation.html#example-for-killing-grobs-voice-line-engraver
+%%% RHYTHMIC GROUPING ARC
+%%%
+%%% In Sargam notation a curved arc UNDER a group of note letters encodes the
+%%% rhythmic subdivision (it replaces the Western beam):
+%%%   2 notes under one arc = eighth notes
+%%%   3 notes under one arc = triplet
+%%%   4 notes under one arc = sixteenth notes, etc.
+%%% So we draw exactly ONE arc per beamed group, spanning the whole group.
+%%%
+%%% WHY a Tie grob with FORCED control-points (see EXPERIMENT-LOG.md):
+%%% The SargamStaff has StaffSymbol.line-count = 0 and pitch-squashed note
+%%% heads, which leaves LilyPond's automatic Tie/Slur vertical positioning
+%%% (Staff_symbol_referencer) without a valid Y reference, so an auto-placed
+%%% arc collapses to invisible. Setting explicit `control-points` bypasses
+%%% that calculation entirely and renders reliably. The control points are
+%%% computed lazily (as a grob callback) once horizontal positions are known.
+
+%% Build the four Bezier control points for the grouping arc that spans from
+%% @var{left-nh} to @var{right-nh}. Coordinates are returned relative to the
+%% tie's own origin so they are independent of where the grob is parented.
+#(define ((sargam-arc-control-points left-nh right-nh) grob)
+   (let* ((refp (ly:grob-common-refpoint left-nh right-nh X))
+          (lx (ly:grob-relative-coordinate left-nh refp X))
+          (rx (ly:grob-relative-coordinate right-nh refp X))
+          (lext (ly:grob-property left-nh 'X-extent))
+          (rext (ly:grob-property right-nh 'X-extent))
+          ;; span just inside the outer edges of the first and last letters
+          (x0 (+ lx (if (pair? lext) (* 0.5 (car lext)) 0)))
+          (x1 (+ rx (if (pair? rext) (* 0.5 (cdr rext)) 0)))
+          (self-x (ly:grob-relative-coordinate grob refp X))
+          (a (- x0 self-x))
+          (b (- x1 self-x))
+          (span (- b a))
+          (top -2.2)    ; arc endpoints: depth just below the letters
+          (dip -2.9))   ; arc middle: lowest point
+     (list (cons a top)
+           (cons (+ a (* span 0.25)) dip)
+           (cons (+ a (* span 0.75)) dip)
+           (cons b top))))
 
 #(define (Sargam_beam_tie_engraver context)
-   "Creates ties below beamed eighth notes in Sargam notation"
+   "Creates one grouping arc spanning each beamed group of Sargam notes.
+    The number of notes under the arc encodes the subdivision
+    (2 = eighths, 3 = triplet, 4 = sixteenths, ...)."
    (let* (
-          ;; Current timestep's note head
-          (current-note-head #f)
-          ;; Store all eighth note heads in current BEAM (across timesteps)
-          (beam-eighth-notes '())
+          ;; All note heads collected in the current BEAM (newest first)
+          (beam-notes '())
           ;; Track if we're inside a beam
           (beam-active #f))
      (make-engraver
       (acknowledgers
-       ;; Acknowledge all note heads
+       ;; Collect note heads shorter than a quarter (dur-log >= 3:
+       ;; eighths, sixteenths, triplet members, ...) directly here, so we do
+       ;; not depend on process-acknowledged firing relative to the beam-end
+       ;; event (the closing note of a pair is acknowledged in the same
+       ;; timestep as the beam's RIGHT event).
        ((note-head-interface engraver grob source-engraver)
         (let* ((cause (ly:grob-property grob 'cause))
                (event-dur-log (if (ly:stream-event? cause)
                                   (ly:duration-log (ly:event-property cause 'duration))
                                   #f)))
-          ;; Check if this is an eighth note (event dur-log = 3)
-          (when (and (number? event-dur-log) (= event-dur-log 3))
-            (set! current-note-head grob)))))
+          (when (and beam-active
+                     (number? event-dur-log) (>= event-dur-log 3))
+            (set! beam-notes (cons grob beam-notes))))))
 
       (listeners
        ;; Track beam events to know when beam starts/ends
@@ -119,43 +156,42 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
           (cond
            ((= LEFT direction)
             (set! beam-active #t)
-            (set! beam-eighth-notes '()))
+            (set! beam-notes '()))
            ((= RIGHT direction)
-            (set! beam-active #f))))))
-
-      ((process-acknowledged engraver)
-       (when current-note-head
-         ;; Always add eighth notes to collection if we're in or just ended a beam
-         (set! beam-eighth-notes (append beam-eighth-notes (list current-note-head)))
-         (set! current-note-head #f)))
+            ;; Keep beam-active true for the rest of this timestep so the
+            ;; closing note head is still collected; we draw the arc at
+            ;; stop-translation-timestep and reset there.
+             (set! beam-active 'ending))))))
 
       ((stop-translation-timestep engraver)
-       ;; If beam just ended and we have notes, create ties
-       (when (and (not beam-active) (>= (length beam-eighth-notes) 2))
-         (let loop ((notes beam-eighth-notes))
-           (when (>= (length notes) 2)
-              (let* ((left-nh (car notes))
-                     (right-nh (cadr notes))
-                     (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
-                (ly:spanner-set-bound! tie LEFT left-nh)
-                (ly:spanner-set-bound! tie RIGHT right-nh)
-                (ly:grob-set-property! tie 'direction DOWN)
-                ;; Tune tie appearance using details (relative positioning)
-                (let ((details (ly:grob-property tie 'details '())))
-                  (ly:grob-set-property! tie 'details
-                    (append details
-                      '((height-limit . 0.6)           ; Smaller, flatter ties
-                        (note-head-gap . 0.15)         ; Small gap below note heads
-                        (ratio . 0.25)))))             ; Less curved (flatter)
-                (ly:engraver-announce-end-grob engraver tie right-nh))
-             (loop (cdr notes))))
-         (set! beam-eighth-notes '()))
-       (set! current-note-head #f))
+       ;; When the beam just ended, draw ONE arc spanning the whole group.
+       (when (and (eq? beam-active 'ending) (>= (length beam-notes) 2))
+         (let* ((ordered (reverse beam-notes))
+                (left-nh (car ordered))
+                (right-nh (car (last-pair ordered)))
+                (tie (ly:engraver-make-grob engraver 'Tie left-nh)))
+           (ly:spanner-set-bound! tie LEFT left-nh)
+           (ly:spanner-set-bound! tie RIGHT right-nh)
+           ;; Anchor the arc's Y (and X) coordinate system on the left note
+           ;; head, so the forced control points are interpreted relative to
+           ;; the Sargam letters in EVERY context (single- and multi-staff).
+           ;; Without this the arc inherits an ambiguous Y reference in
+           ;; multi-staff scores and renders far away / off the staff.
+           (ly:grob-set-parent! tie Y left-nh)
+           (ly:grob-set-parent! tie X left-nh)
+           (ly:grob-set-property! tie 'direction DOWN)
+           ;; Forced control points -> bypass broken auto positioning.
+           (ly:grob-set-property! tie 'control-points
+             (sargam-arc-control-points left-nh right-nh))
+           (ly:engraver-announce-end-grob engraver tie right-nh)))
+       (when (eq? beam-active 'ending)
+         (set! beam-active #f)
+         (set! beam-notes '())))
 
       ((finalize engraver)
-       (set! beam-eighth-notes '())
-       (set! current-note-head #f)))))
-
+       (set! beam-notes '())
+       (set! beam-active #f))
+       )))
 
 #(define (sargamHeadStencil grob)
    (let* (
@@ -202,12 +238,13 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     \consists Pitch_squash_engraver
     \consists Beam_engraver
     squashedPosition = #0
-    \override NoteHead.style = #'slash
+    %\override NoteHead.style = #'slash
+    \override NoteHead.stencil =  #(lambda (grob) (sargamHeadStencil grob))
+
     \hide Stem
     \alias Voice
-    
-    %% Ties are handled in SargamStaff context, not here
   }
+  
   \context {
     \Staff
     \accepts SargamVoice
@@ -238,17 +275,14 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     \consists Staff_symbol_engraver
     \consists Time_signature_engraver
     \consists Rest_engraver
+    \consists Beam_engraver
     \consists Auto_beam_engraver
 
-    %% Ties for beamed eighth notes
+    %% Rhythmic grouping arcs below beamed note groups.
+    %% Tie_engraver is needed so the 'Tie grobs we create are collected
+    %% and drawn; Sargam_beam_tie_engraver supplies one arc per beam group.
     \consists Tie_engraver
     \consists #Sargam_beam_tie_engraver
-    
-    %% Tie positioning for Sargam notation (relative positioning via details)
-    \override Tie.direction = #DOWN
-    \override Tie.details.height-limit = #0.6
-    \override Tie.details.note-head-gap = #0.15
-    \override Tie.details.ratio = #0.25
 
     \alias RhythmicStaff
   }
