@@ -2,7 +2,7 @@
 
 \include "../paper.ily"
 \include "raag.ly"
-
+\language "sargam"
 
 melodyGatI = \relative S' {
   % Start at Beat 1
@@ -24,19 +24,19 @@ textI = \lyricmode {
       \key D \major
       \transpose S Re {
         \tintal
-        \melodyGatI 
+        \melodyGatI
       }
     }
 %
     \new SargamStaff = "sargam" {
       \set SargamStaff.instrumentName = "Sargam"
       \key D \major
-      
+
         \tintal
         \new SargamVoice = "gatI" {
-          \melodyGatI 
+          \melodyGatI
         }
-      
+
     }
     % \new Lyrics \lyricsto "gatI" { \textI }
   >>
@@ -44,6 +44,6 @@ textI = \lyricmode {
     title = "Raag Yalman Kalyan"
     composer = "Josh Feinburg"
   }
-  
+
 }
 

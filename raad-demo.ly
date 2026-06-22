@@ -1,21 +1,22 @@
 \version "2.24"
 
 \include "raag.ly"
+\language "sargam"
 
 %% MUSIK
 
 raagMhegGatI = \relative S' {
   % Start at Beat 8
   m8( M Re S) Re n
-  S 
-  % g8 g e d c d 
-  
+  S
+  % g8 g e d c d
+
   Re4 \chik 4
-  % e4 \chik 
-  
+  % e4 \chik
+
   P-> m \glissando Re
   Re2
-  % a g \glissando e 
+  % a g \glissando e
   % n \glissando P
   % c \glissando a
 }
@@ -30,7 +31,7 @@ raagMhegGatI = \relative S' {
       \transpose S Re {
         \jhaptal
         { r2 r2. r2 }
-        \raagMhegGatI 
+        \raagMhegGatI
       }
     }
     \new Staff {
@@ -40,20 +41,20 @@ raagMhegGatI = \relative S' {
         \jhaptal
         \new SargamVoice {
           { r2 r2. r2 }
-          \raagMhegGatI 
+          \raagMhegGatI
         }
       }
     }
     \new SargamStaff = "my fist sargam staff" {
       \set SargamStaff.instrumentName = "Sargam Staff"
       \key Re \major
-      
+
         \jhaptal
         \new SargamVoice {
           { r2 r2. r2 }
-          \raagMhegGatI 
+          \raagMhegGatI
         }
-      
+
     }
   >>
 }

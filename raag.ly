@@ -67,7 +67,9 @@ sargamPitchStrings = #`(
 #(set! language-pitch-names
        (append language-pitch-names
                (list `(sargam . ,sargamPitchNames))))
-\language "sargam"
+%% We can now select "sargam" as the language to get these pitch names in the score.
+%% But this is a user choice because the same pitch names are used in different contexts
+%% \language "sargam"
 
 #(define-syntax-rule (log-exprs exp ...)
   (begin (format #t "~a: ~S\n" (quote exp) exp) ...))
