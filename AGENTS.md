@@ -144,7 +144,7 @@ Defined in `raag.ly`, based on C major scale:
 - `d` = Dha komal (A flat)
 - `n` = Ni komal (B flat)
 
-**Important:** Use `\language "sargam"` (already set in raag.ly) to enable these pitch names.
+**Important:** Use `\language "sargam"`  to enable these pitch names.
 
 ### Comments
 
