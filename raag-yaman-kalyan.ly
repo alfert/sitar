@@ -8,7 +8,10 @@ melodyGatI = \relative S' {
   % Start at Beat 1
   % Beams are automatic: LilyPond decides the grouping and the Sargam
   % grouping arc follows it (no explicit [ ] needed).
-  G4 \chik 4 G Re \bar "!"\break G M8 M P P D D \bar "!" \break G4 Re P8 P M M \bar "!" G8 r8 G8 Re r Re8 S4 |
+  \da G4 \chik 4 \da G \ra Re \bar "!" %\break 
+  \da G4 \diri { M8 M } \diri { P P } \diri { D D } \bar "!" \break 
+  \da G4 \ra Re  \diri{P8 P} \diri{M M} \bar "!" 
+  \da G8 r8 \ra G8 \da Re r \ra Re8 \da S4 |
   S2
 }
 

@@ -250,6 +250,43 @@ duration:
 \jhaptal   % 10-beat tala cycle (2+3+2+3)
 ```
 
+### Bols (mizrab / plectrum strokes)
+
+Right-hand stroke annotations in a flat row BELOW the staff. Generic (like
+violin bowing or guitar picking), so they render on BOTH the normal notation
+Staff and the SargamStaff. All three are written PREFIX (they mutate the note
+event, the only mechanism that reaches both staves; a postfix `G\da` cannot,
+because the normal staff strips articulations before the note head is engraved).
+
+```lilypond
+\da G            % da: single downstroke, drawn as a vertical bar  |
+\ra Re           % ra: single upstroke,   drawn as a dash          —
+\diri { M8 M }   % diri: fast down-up across TWO notes, caret/triangle ⌃
+```
+
+- `\da` / `\ra` wrap EXACTLY one note (error otherwise); set its `bol` event
+  property to `'da` / `'ra`.
+- `\diri` wraps EXACTLY two notes of ANY durations (16+16, 8+16, 16+8, 8+8, …).
+  It tags the first note `diri = LEFT` and the last `diri = RIGHT`; pairing is
+  explicit (from the wrap), NOT inferred from rhythm. Errors if not 2 notes.
+- On a SargamStaff a diri pair therefore shows the beat-grouping arc (⌣) ABOVE
+  the letters (rhythm) and the diri caret (⌃) BELOW (matches the book).
+
+### Bol_arc_engraver (raag.ly, after `Sargam_beat_arc_engraver`)
+
+Draws all bols (the `\da` bar `|`, the `\ra` dash `—`, and the `\diri` caret ⌃)
+on ONE flat row. It reads the `bol` / `diri` event properties, then reuses a Tie
+spanner ONLY as a positioning vehicle (parent-anchored to a note head so it
+renders on both a normal Staff and the pitch-squashed SargamStaff), overriding
+the Tie's `stencil`. The row is kept flat RELATIVE TO THE STAFF (not the note
+head) via `sargam-bol-base`, which cancels the head's pitch so the bols form one
+horizontal line at `sargam-bol-baseline` below the staff instead of drifting
+with the melody. Consisted into both the `Staff` and `SargamStaff` contexts in
+the `\layout` block.
+
+`\da`/`\ra` are simple below-note markups with a high `outside-staff-priority`
+(`sargamBolPriority`) so the bol row sits below everything else.
+
 ### Custom Contexts
 
 **SargamVoice** (raag.ly:233)

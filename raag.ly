@@ -28,6 +28,65 @@ chik =
    #})
 % chik = { \arpeggioArrowDown r4\arpeggio \arpeggioNormal}
 
+%% Bols (mizrab / plectrum strokes) — a stroke-annotation row below the notes.
+%% Conceptually like violin bowing or guitar picking, so these work on ANY
+%% staff (normal notation Staff and SargamStaff alike), not just Sargam.
+%%
+%%   \da   = single downstroke, drawn as a vertical bar  |
+%%   \ra   = single upstroke,   drawn as a dash          —
+%%   \diri = fast down-up across TWO notes, drawn as a caret/triangle ⌃
+%%
+%% All three bols are drawn by Bol_arc_engraver as note-head-anchored stencils
+%% at ONE fixed baseline (sargam-bol-baseline) below the letters, so they share
+%% a single row and never collide with the beat-grouping arc. On the pitch-
+%% squashed SargamStaff (heads at position 0) this yields a flat row; on a normal
+%% Staff the bols track the note heads like ordinary bowing/picking marks.
+#(define sargam-bol-baseline -5.2)
+
+%% Single-note bols. Written PREFIX like \diri (\da G, \ra Re): they mutate the
+%% note event's 'bol property, the same cross-staff mechanism \diri uses, so they
+%% render on BOTH the normal Staff and the SargamStaff. (A postfix G\da cannot
+%% reach the normal staff, which strips articulations before the note head is
+%% engraved.)
+#(set-object-property! 'bol 'music-type? symbol?)
+#(set-object-property! 'bol 'music-doc
+  "set on a NoteEvent to 'da or 'ra to mark a single-note plectrum stroke")
+
+#(define (sargam-tag-single-bol music kind)
+   (let ((notes (filter (lambda (e)
+                          (memq 'note-event (ly:music-property e 'types)))
+                        (extract-named-music music '(NoteEvent)))))
+     (if (not (= (length notes) 1))
+         (ly:error "\\da / \\ra must wrap exactly 1 note, got ~a" (length notes))
+         (begin (ly:music-set-property! (car notes) 'bol kind) music))))
+
+da =
+#(define-music-function (music) (ly:music?)
+   (sargam-tag-single-bol music 'da))
+ra =
+#(define-music-function (music) (ly:music?)
+   (sargam-tag-single-bol music 'ra))
+
+%% \diri wraps EXACTLY two notes (any durations: 16+16, 8+16, 16+8, 8+8, ...)
+%% and tags the first note LEFT and the last note RIGHT, so Bol_arc_engraver can
+%% draw one arc spanning the pair. Pairing is explicit (from the wrap), NOT
+%% inferred from rhythm.
+#(set-object-property! 'diri 'music-type? symbol?)
+#(set-object-property! 'diri 'music-doc
+  "set on a NoteEvent to LEFT/RIGHT to mark a diri stroke pair endpoint")
+
+diri =
+#(define-music-function (music) (ly:music?)
+   (let ((notes (filter (lambda (e)
+                          (memq 'note-event (ly:music-property e 'types)))
+                        (extract-named-music music '(NoteEvent)))))
+     (if (not (= (length notes) 2))
+         (ly:error "\\diri must wrap exactly 2 notes, got ~a" (length notes))
+         (begin
+           (ly:music-set-property! (car notes) 'diri LEFT)
+           (ly:music-set-property! (cadr notes) 'diri RIGHT)
+           music))))
+
 %% Indian Rhythms
 jhaptal = \compoundMeter #'((2 3 2 3 4))
 tintal = \compoundMeter #'((4 4 4 4 4))
@@ -220,6 +279,108 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
        (set! by-beat '()))
        )))
 
+%% Build a triangle (caret ⌃) stencil for the diri bol, spanning from
+%% @var{left-nh} to @var{right-nh}, drawn on the bol row BELOW the letters.
+%% This is the book's diri glyph (like \rtoe), not a bow. Coordinates are
+%% relative to the grob's own origin (parented to the left note head).
+#(define ((sargam-bol-triangle-stencil left-nh right-nh) grob)
+   (let* ((refp (ly:grob-common-refpoint left-nh right-nh X))
+          (lx (ly:grob-relative-coordinate left-nh refp X))
+          (rx (ly:grob-relative-coordinate right-nh refp X))
+          (lext (ly:grob-property left-nh 'X-extent))
+          (rext (ly:grob-property right-nh 'X-extent))
+          (x0 (+ lx (if (pair? lext) (* 0.5 (car lext)) 0)))
+          (x1 (+ rx (if (pair? rext) (* 0.5 (cdr rext)) 0)))
+          (self-x (ly:grob-relative-coordinate grob refp X))
+          (a (- x0 self-x))
+          (b (- x1 self-x))
+          (mid (/ (+ a b) 2))
+          (base (sargam-bol-base grob))   ; bol row baseline (feet of the triangle)
+          (apex (+ base 0.9))   ; peak of the caret
+          (th 0.12))    ; line thickness
+     (ly:stencil-add
+       (make-line-stencil th a base mid apex)
+       (make-line-stencil th mid apex b base))))
+
+%% The bol baseline expressed in @var{grob}'s OWN Y frame, such that in STAFF
+%% coordinates it always equals sargam-bol-baseline. This keeps the bol row flat
+%% relative to the staff (not the note head): on the pitch-squashed SargamStaff
+%% heads sit at position 0 anyway, while on a normal Staff this cancels the
+%% head's pitch so the bols form one flat row below the staff instead of drifting
+%% with the melody.
+#(define (sargam-bol-base grob)
+   (let ((staff (ly:grob-object grob 'staff-symbol)))
+     (if (ly:grob? staff)
+         (let* ((refp (ly:grob-common-refpoint grob staff Y))
+                (grob-y (ly:grob-relative-coordinate grob refp Y))
+                (staff-y (ly:grob-relative-coordinate staff refp Y)))
+           ;; bol baseline (staff-relative) expressed in the grob's own Y frame
+           (- (+ staff-y sargam-bol-baseline) grob-y))
+         sargam-bol-baseline)))
+
+#(define (sargam-bol-kind note-event)
+   (if (ly:stream-event? note-event)
+       (ly:event-property note-event 'bol #f)
+       #f))
+
+%% Stencil for a single-note bol (da = vertical bar, ra = dash), drawn centered
+%% on @var{nh} at the shared bol baseline. Coordinates are relative to the
+%% grob's own origin (parented to the note head).
+#(define ((sargam-bol-mark-stencil nh kind) grob)
+   (let* ((self-x (ly:grob-relative-coordinate grob nh X))
+          (ext (ly:grob-property nh 'X-extent))
+          ;; note-head visual center in the grob's own X frame
+          (cx (+ (- 0 self-x)
+                 (if (pair? ext) (* 0.5 (+ (car ext) (cdr ext))) 0)))
+          (base (sargam-bol-base grob))
+          (th 0.22))
+     (case kind
+       ;; da: a vertical downstroke bar |
+       ((da) (make-line-stencil th cx base cx (+ base 1.6)))
+       ;; ra: a horizontal upstroke dash —
+       ((ra) (make-line-stencil th (- cx 0.8) (+ base 0.7) (+ cx 0.8) (+ base 0.7)))
+       (else empty-stencil))))
+
+%% Draws the diri caret (⌃, a triangle) across each pair of note heads tagged
+%% by \diri, AND the single-note bols \da (|) and \ra (—). All three sit on the
+%% shared bol baseline (sargam-bol-baseline) below the letters. Pairs are
+%% explicit (from the \diri wrap). We reuse a Tie spanner ONLY as a positioning
+%% vehicle (forced parent-anchoring to a note head so it renders on both a normal
+%% Staff and the pitch-squashed SargamStaff), overriding its stencil.
+#(define (Bol_arc_engraver context)
+   "Draws diri carets and \\da/\\ra single-note bols on the shared bol row."
+   (let ((pending-left #f))
+     (make-engraver
+      (acknowledgers
+       ((note-head-interface engraver grob source-engraver)
+        ;; Single-note bol (\da / \ra): a mark centered on this head.
+        (let ((kind (sargam-bol-kind (event-cause grob))))
+          (when (symbol? kind)
+            (let ((mark (ly:engraver-make-grob engraver 'Tie grob)))
+              (ly:spanner-set-bound! mark LEFT grob)
+              (ly:spanner-set-bound! mark RIGHT grob)
+              (ly:grob-set-parent! mark Y grob)
+              (ly:grob-set-parent! mark X grob)
+              (ly:grob-set-property! mark 'stencil
+                (sargam-bol-mark-stencil grob kind))
+              (ly:engraver-announce-end-grob engraver mark grob))))
+        ;; Diri caret: spans a tagged pair.
+        (let ((tag (ly:event-property (event-cause grob) 'diri #f)))
+          (cond
+           ((eqv? tag LEFT) (set! pending-left grob))
+           ((and (eqv? tag RIGHT) pending-left)
+            (let* ((left pending-left)
+                   (right grob)
+                   (tie (ly:engraver-make-grob engraver 'Tie left)))
+              (ly:spanner-set-bound! tie LEFT left)
+              (ly:spanner-set-bound! tie RIGHT right)
+              (ly:grob-set-parent! tie Y left)
+              (ly:grob-set-parent! tie X left)
+              (ly:grob-set-property! tie 'stencil
+                (sargam-bol-triangle-stencil left right))
+              (ly:engraver-announce-end-grob engraver tie right)
+              (set! pending-left #f))))))))))
+
 %% How many trailing beats does a note of @var{dur-log} (whole=0, half=1)
 %% occupy beyond its first beat, ignoring dots? Falls back to dur-log when the
 %% real duration is unavailable.
@@ -318,6 +479,9 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
   \context {
     \Staff
     \accepts SargamVoice
+    %% Bols work on any staff (like bowing/picking), so consist the diri arc
+    %% engraver here too. Tie_engraver is present in Staff by default.
+    \consists #Bol_arc_engraver
   }
   \context {
     \name SargamStaff
@@ -355,6 +519,7 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
     %% grobs we create are collected and drawn.
     \consists Tie_engraver
     \consists #Sargam_beat_arc_engraver
+    \consists #Bol_arc_engraver
 
     \alias RhythmicStaff
   }
