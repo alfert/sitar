@@ -7,7 +7,7 @@
 
 raagMhegGatI = \relative S' {
   % Start at Beat 8
-  m8( M Re S) Re n
+  \diri {m8( M}  \diri {Re S)} \diri {Re n}
   S
   % g8 g e d c d
 
@@ -40,6 +40,7 @@ raagMhegGatI = \relative S' {
       \transpose S Re {
         \jhaptal
         \new SargamVoice {
+          \sargamSa Re
           { r2 r2. r2 }
           \raagMhegGatI
         }

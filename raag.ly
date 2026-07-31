@@ -137,6 +137,61 @@ sargamPitchStrings = #`(
    (cons (cdr p) (car p)))
 pitchToSargam = #(map swap-pair sargamPitchNames)
 
+%% Sargam letters are relative to Sa (the tonic), NOT to absolute pitch, and are
+%% computed CHROMATICALLY (by semitone from Sa) so they survive any \transpose
+%% and enharmonic respelling. By default Sa = C. If a staff is transposed (e.g.
+%% \transpose S Re moves the sounding key up a tone), set \sargamSa to the ACTUAL
+%% sounding pitch of Sa so the letters and octave dots stay Sa-relative:
+%%
+%%   \new SargamVoice { \sargamSa Re \transpose S Re { \melody } }
+%%
+%% \sargamSa sets the NoteHead.sargam-sa grob property; the head stencil reads it.
+#(define sargam-sa-default (ly:make-pitch -1 0 NATURAL))
+
+#(set-object-property! 'sargam-sa 'backend-type? ly:pitch?)
+#(set-object-property! 'sargam-sa 'backend-doc
+  "the sounding pitch of Sa for this staff (sargam letters are relative to it)")
+#(if (not (memq 'sargam-sa all-user-grob-properties))
+     (set! all-user-grob-properties (cons 'sargam-sa all-user-grob-properties)))
+
+sargamSa =
+#(define-music-function (p) (ly:pitch?)
+   #{ \override NoteHead.sargam-sa = #p #})
+
+%% Semitone distance from Sa -> sargam letter. This is transposition-invariant
+%% (chromatic), so it is robust to whatever enharmonic spelling \transpose picks.
+%% Bhatkhande case convention: shuddha (natural) swaras are CAPITAL, komal (flat)
+%% swaras are lowercase. Both Ma variants print as capital "M"; tivra Ma (6) is
+%% additionally barred (handled in the stencil).
+%% 0=S 1=r 2=R 3=g 4=G 5=M(shuddha) 6=M(tivra,barred) 7=P 8=d 9=D 10=n 11=N.
+#(define sargam-semitone-strings
+   #("S" "r" "R" "g" "G" "M" "M" "P" "d" "D" "n" "N"))
+
+%% Chromatic semitone of a pitch measured from Sa=C (octave folded out).
+#(define (sargam-chromatic p)
+   (+ (list-ref '(0 2 4 5 7 9 11) (ly:pitch-notename p))
+      (inexact->exact (round (* 2 (ly:pitch-alteration p))))))
+
+#(define (sargam-semitone-from-sa pitch sa)
+   (modulo (- (sargam-chromatic pitch) (sargam-chromatic sa)) 12))
+
+%% Register (saptak) of @var{pitch} relative to Sa: 0 = middle, +1 = upper, etc.
+%% Uses absolute chromatic so it is correct under any \transpose spelling. Sa is
+%% folded to the middle octave (0) so that a note in Sa's own octave reads as
+%% middle regardless of how Sa itself is spelled.
+#(define (sargam-register pitch sa)
+   (let* ((abs-p (+ (* 12 (ly:pitch-octave pitch)) (sargam-chromatic pitch)))
+          (sa-chroma (sargam-chromatic sa))
+          ;; Sa placed in the same octave as the note's octave-0 frame
+          (abs-sa sa-chroma))
+     (floor (/ (- abs-p abs-sa) 12))))
+
+%% The sargam letter string for @var{pitch} relative to @var{sa}, e.g. "M" for
+%% tivra Ma. Returns the bare letter; the barred-M substitution happens in the
+%% stencil (only the tivra-Ma semitone, 6, is the barred capital M).
+#(define (sargam-letter pitch sa)
+   (vector-ref sargam-semitone-strings (sargam-semitone-from-sa pitch sa)))
+
 head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
    (let* (
           (pi (ly:make-pitch -1 (ly:pitch-notename pitch) (ly:pitch-alteration pitch)))
@@ -403,14 +458,36 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
          (cons (make-hspace-markup 0.4)
                (map (lambda (i) (markup "—")) (iota n-dashes))))))
 
+%% Tivra Ma is written in Bhatkhande notation as a capital "M" with a short
+%% vertical bar centered ON TOP of the letter (shuddha Ma is a plain capital M).
+%% We measure the M's actual extent and place the bar at its horizontal centre,
+%% just above its top, keeping the M on the baseline. No special font is needed
+%% and only tivra Ma is affected.
+#(define-markup-command (sargamBarredM layout props) ()
+   (let* ((m (interpret-markup layout props (markup #:bold "M")))
+          (xe (ly:stencil-extent m X))
+          (ye (ly:stencil-extent m Y))
+          (cx (/ (+ (car xe) (cdr xe)) 2))
+          (top (cdr ye))
+          (bar (make-line-stencil 0.22 cx (+ top 0.15) cx (+ top 0.75))))
+     (ly:stencil-add m bar)))
+
 #(define (sargamHeadStencil grob)
    (let* (
           (shape (ly:grob-property grob 'style))
           (dur-log (ly:grob-property grob 'duration-log))
           (cause (event-cause grob))
-          (pitch (ly:event-property cause 'pitch))
-          (octave (ly:pitch-octave pitch))
-          (head (head-name-from-pitch pitch))
+          (raw-pitch (ly:event-property cause 'pitch))
+          ;; Sa reference for this staff (default C); makes the letter Sa-relative
+          ;; so it survives \transpose. Set via \sargamSa.
+          (sa (let ((v (ly:grob-property grob 'sargam-sa #f)))
+                (if (ly:pitch? v) v sargam-sa-default)))
+          ;; register (saptak) dots relative to Sa: 0 = middle (no dots).
+          (octave (sargam-register raw-pitch sa))
+          (semitone (sargam-semitone-from-sa raw-pitch sa))
+          (head0 (sargam-letter raw-pitch sa))
+          ;; tivra Ma (6 semitones above Sa) -> barred capital M (Bhatkhande)
+          (head (if (= semitone 6) (markup #:sargamBarredM) head0))
           (note-dur (ly:event-property cause 'duration))
           (note-length (if (ly:duration? note-dur)
                            (ly:moment-main (ly:duration-length note-dur))

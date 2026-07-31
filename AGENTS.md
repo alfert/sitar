@@ -146,6 +146,31 @@ Defined in `raag.ly`, based on C major scale:
 
 **Important:** Use `\language "sargam"`  to enable these pitch names.
 
+**Ma variants (input vs. print):** In the LilyPond INPUT, `m` = Ma shuddha (F)
+and `M` = Ma tivra (F#) — lowercase vs. uppercase is how the two are told apart.
+In the PRINTED sargam (Bhatkhande convention) BOTH print as a capital **M**;
+tivra Ma additionally gets a short vertical bar centered on top of the M
+(`sargamBarredM`). More generally, printed shuddha (natural) swaras are CAPITAL
+(S R G M P D N) and komal (flat) swaras are lowercase (r g d n), independent of
+the input letter case — the printed letter is derived chromatically from Sa.
+
+**Transposition (`\sargamSa`):** Sargam letters are relative to Sa (the tonic),
+computed CHROMATICALLY (by semitone from Sa), so they are independent of the
+absolute pitch and of enharmonic spelling. By default Sa = C. If a staff is
+written inside a `\transpose` (e.g. `\transpose S Re` to sound in D), the sargam
+letters would otherwise shift; set `\sargamSa` to the ACTUAL sounding pitch of
+Sa so the letters (and octave dots) stay correct:
+
+```lilypond
+\new SargamVoice {
+  \sargamSa Re            % Sa sounds as Re (D) on this transposed staff
+  \transpose S Re { \myMelody }
+}
+```
+
+`\sargamSa` sets the `NoteHead.sargam-sa` grob property (a pitch), read by
+`sargamHeadStencil`. Non-transposed SargamStaves need nothing (default Sa = C).
+
 ### Comments
 
 Use consistent comment styles:
@@ -211,6 +236,11 @@ Note heads are rendered via the `sargamHeadStencil` function (raag.ly:196), whic
 - Displays Sargam letter names (S, R, G, M, P, D, N) instead of traditional note heads
 - Adds octave dots above/below note names
 - Formats duration indicators (underlines, dashes)
+- Renders **tivra Ma** (pitch `M`, F#) as a capital **M with a short vertical
+  bar centered on top** (Bhatkhande convention); shuddha Ma (`m`, F) prints as a
+  plain capital M. The bar is drawn by the `sargamBarredM` markup command, which
+  measures the M's extent and centres the bar over it, so no special font is
+  required and only tivra Ma changes.
 
 ### Octave Notation
 
