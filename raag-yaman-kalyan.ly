@@ -12,7 +12,7 @@ melodyGatI = \relative S' {
   \da G4 \diri { M8 M } \diri { P P } \diri { D D } \bar "!" \break 
   \da G4 \ra Re  \diri{P8 P} \diri{M M} \bar "!" 
   \da G8 r8 \ra G8 \da Re r \ra Re8 \da S4 |
-  S2
+  S N D P \bar "!" S' Re G M 
 }
 
 textI = \lyricmode {

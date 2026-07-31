@@ -203,18 +203,40 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
            (assoc-ref sargamPitchStrings (cdr p))
            "not found"))))
 
-#(define (stack-dots n)
-  "stacks @var{n} dots either below or on top"
-  (let* (
-          (dot #{ \markup { \override #'(baseline-skip . 0.4) \musicglyph #"dots.dot" } #}))
-     (make-column-markup (make-list n dot))
-  ))
-% #(define (stack-note note super-dots sub-dots)
-stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? markup? markup?)
-   "stacks together a single @var(note) with its ocatve dots @var{super-dots}
-    and @var{sub-dots}"
-    #{  \markup \column { {\raise #-2 #super-dots } #notename {\raise #2 #sub-dots } } #}
-   )
+%% One octave dot as a stencil (a small filled circle; font-independent).
+#(define (sargam-dot-stencil radius)
+   (make-circle-stencil radius 0 #t))
+
+%% Build a note-head stencil: the letter with @var{super} octave dots above and
+%% @var{sub} octave dots below. The LETTER is the anchor: it always sits on the
+%% same baseline regardless of octave, and the dots are placed at a small fixed
+%% gap from the letter's actual top/bottom extent (so a taar dot lands ABOVE the
+%% tivra-Ma bar, choice A). Dots are horizontally centred on the letter and
+%% stack outward for ati-taar / ati-mandra (2+ octaves).
+%% gap between letter and first dot; vertical step between stacked dots
+#(define sargam-dot-gap 0.45)
+#(define sargam-dot-step 0.6)
+#(define sargam-dot-radius 0.14)
+
+#(define (sargam-stack-note note-stc super sub)
+   (let* ((dot (sargam-dot-stencil sargam-dot-radius))
+          (xe (ly:stencil-extent note-stc X))
+          (ye (ly:stencil-extent note-stc Y))
+          (cx (/ (+ (car xe) (cdr xe)) 2))
+          ;; a single dot centred at (cx . y)
+          (place-dot (lambda (y) (ly:stencil-translate dot (cons cx y))))
+          (result note-stc))
+     ;; super dots: above the letter's top, stacking upward
+     (let loop ((i 0) (y (+ (cdr ye) sargam-dot-gap)))
+       (when (< i super)
+         (set! result (ly:stencil-add result (place-dot y)))
+         (loop (+ i 1) (+ y sargam-dot-step))))
+     ;; sub dots: below the letter's bottom, stacking downward
+     (let loop ((i 0) (y (- (car ye) sargam-dot-gap)))
+       (when (< i sub)
+         (set! result (ly:stencil-add result (place-dot y)))
+         (loop (+ i 1) (- y sargam-dot-step))))
+     result))
 
 %% Borrowd from Lily 2.25.1
 #(define (ly:event-length event moment)
@@ -497,16 +519,10 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
           (sub (case dur-log
                   ((3) (lambda (m) (make-underline-markup m)))
                   (else (lambda (m) m))))
-          ;; Punkte drüber/drunter für die Oktaven!
-          (super-dots
-            (if (> octave 0)
-              (stack-dots octave)
-              (markup "")
-              ))
-         (sub-dots (if (< octave 0)
-              (stack-dots (- octave))
-              (markup "")))
-         (note-number
+          ;; octave dot counts: taar (>0) above, mandra (<0) below the letter.
+          (n-super (if (> octave 0) octave 0))
+          (n-sub   (if (< octave 0) (- octave) 0))
+          (note-number
             ;; letter (with octave underline for 8ths) then the em-dash tail
             (make-bold-markup
               (make-line-markup
@@ -514,8 +530,11 @@ stack-note = #(define-scheme-function (notename super-dots sub-dots) (markup? ma
           )
      (grob-interpret-markup grob
           (make-lower-markup 0.5
-             (stack-note  note-number super-dots sub-dots)
-          ))))
+             (markup #:stencil
+               (sargam-stack-note
+                 (grob-interpret-markup grob note-number)
+                 n-super n-sub)))
+          )))
 
 
 %% A rest in Sargam notation is written as a dash (—), per the rhythmic
