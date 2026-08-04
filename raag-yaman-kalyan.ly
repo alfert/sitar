@@ -6,26 +6,22 @@
 
 melodyGatI = \relative S' {
   % Start at Beat 1
-  % Beams are automatic: LilyPond decides the grouping and the Sargam
-  % grouping arc follows it (no explicit [ ] needed).
+  
   \da G4 \chik 4 \da G \ra Re \bar "!" %\break 
   \da G4 \diri { M8 M } \diri { P P } \diri { D D } \bar "!" \break 
   \da G4 \ra Re  \diri{P8 P} \diri{M M} \bar "!" 
   \da G8 r8 \ra G8 \da Re r \ra Re8 \da S4 |
-  S N D P \bar "!" S' Re G M 
-}
-
-textI = \lyricmode {
-  G G Re G M M P P D D G Re P P M M Gr G Re  Re S |
+  S n d P \bar "!" S' Re G M 
 }
 
 
+\language "deutsch"
 \score {
   <<
     \new Staff {
       \set Staff.instrumentName = "Melody"
-      \key D \major
-      \transpose S Re {
+      \key a\major
+      \transpose c d {
         \tintal
         \melodyGatI
       }
@@ -33,7 +29,7 @@ textI = \lyricmode {
 %
     \new SargamStaff = "sargam" {
       \set SargamStaff.instrumentName = "Sargam"
-      \key D \major
+      \key a \major
 
         \tintal
         \new SargamVoice = "gatI" {

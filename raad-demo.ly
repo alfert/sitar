@@ -34,18 +34,18 @@ raagMhegGatI = \relative S' {
         \raagMhegGatI
       }
     }
-    \new Staff {
-      \set Staff.instrumentName = "Sargam Voice"
-      \key Re \major
-      \transpose S Re {
-        \jhaptal
-        \new SargamVoice {
-          \sargamSa Re
-          { r2 r2. r2 }
-          \raagMhegGatI
-        }
-      }
-    }
+    % \new Staff {
+%       \set Staff.instrumentName = "Sargam Voice"
+%       \key Re \major
+%       \transpose S Re {
+%         \jhaptal
+%         \new SargamVoice {
+%           \sargamSa Re
+%           { r2 r2. r2 }
+%           \raagMhegGatI
+%         }
+%       }
+%     }
     \new SargamStaff = "my fist sargam staff" {
       \set SargamStaff.instrumentName = "Sargam Staff"
       \key Re \major
