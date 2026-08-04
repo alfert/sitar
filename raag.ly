@@ -90,6 +90,7 @@ diri =
 %% Indian Rhythms
 jhaptal = \compoundMeter #'((2 3 2 3 4))
 tintal = \compoundMeter #'((4 4 4 4 4))
+jattaal = \compoundMeter #'((4 4 4))
 
 %%%%%%%%%%%%%%%%%%%%
 
@@ -478,7 +479,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
        (markup "")
        (make-line-markup
          (cons (make-hspace-markup 0.4)
-               (map (lambda (i) (markup "—")) (iota n-dashes))))))
+               (map (lambda (i) (markup "–")) (iota n-dashes))))))
 
 %% Tivra Ma is written in Bhatkhande notation as a capital "M" with a short
 %% vertical bar centered ON TOP of the letter (shuddha Ma is a plain capital M).
@@ -540,7 +541,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
 %% A rest in Sargam notation is written as a dash (—), per the rhythmic
 %% notation rules. It sits in the same baseline as the note letters and, like a
 %% note, counts as one subdivision of its beat (so it can sit under a grouping
-%% arc). We render an em-dash in the same bold style as the letters.
+%% arc). We render an en-dash in the same bold style as the letters.
 %%
 %% A chikari stroke (\chik) is rhythmically a rest too, but is marked with the
 %% `sargam-chik` property and drawn as a tick-mark glyph instead of the dash.
@@ -552,7 +553,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
              (make-musicglyph-markup "scripts.tickmark"))))
        (grob-interpret-markup grob
          (make-lower-markup 0.5
-           (make-bold-markup "—")))))
+           (make-bold-markup "–")))))
 
 
 \layout {
