@@ -1,4 +1,4 @@
-\version "2.24"
+\version "2.26.0"
 
 %% LIBRARY
 
@@ -88,9 +88,9 @@ diri =
            music))))
 
 %% Indian Rhythms
-jhaptal = \compoundMeter #'((2 3 2 3 4))
-tintal = \compoundMeter #'((4 4 4 4 4))
-jattaal = \compoundMeter #'((4 4 4))
+jhaptal = \timeAbbrev #'((2 3 2 3 4))
+tintal = \timeAbbrev #'((4 4 4 4 4))
+jattaal = \timeAbbrev #'((4 4 4))
 
 %%%%%%%%%%%%%%%%%%%%
 
@@ -513,7 +513,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
           (head (if (= semitone 6) (markup #:sargamBarredM) head0))
           (note-dur (ly:event-property cause 'duration))
           (note-length (if (ly:duration? note-dur)
-                           (ly:moment-main (ly:duration-length note-dur))
+                           (ly:moment-main (ly:duration->moment note-dur))
                            #f))
           (n-dashes (sargam-extra-beats dur-log note-length))
           (postfix (sargam-duration-postfix-markup n-dashes))
@@ -601,7 +601,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
     \consists Font_size_engraver
     \consists Instrument_name_engraver
     \consists Ledger_line_engraver
-    \consists Output_property_engraver
+    \consists Apply_output_engraver
     \consists Pitch_squash_engraver
     \consists Separating_line_group_engraver
     \consists Staff_highlight_engraver
@@ -629,3 +629,12 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
     \accepts SargamStaff
   }
 }
+
+
+%{
+convert-ly (GNU LilyPond) 2.26.0  convert-ly: Processing `'...
+Applying conversion: 2.24.0, 2.25.0, 2.25.1, 2.25.2, 2.25.3, 2.25.4,
+2.25.5, 2.25.6, 2.25.8, 2.25.9, 2.25.11, 2.25.12, 2.25.13, 2.25.18,
+2.25.22, 2.25.23, 2.25.24, 2.25.25, 2.25.26, 2.25.28, 2.25.30,
+2.25.31, 2.25.32, 2.25.33, 2.25.34, 2.25.35, 2.25.80, 2.26.0
+%}

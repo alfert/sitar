@@ -1,3 +1,5 @@
+\version "2.26.0"
+
 #(set-global-staff-size 18)
 \paper {
   #(include-special-characters)
@@ -7,15 +9,10 @@
 %                           "Luxi Mono"
 %      1
 %    ))
-  #(define fonts
-    (set-global-fonts
-     #:music "emmentaler"
-     #:brace "emmentaler"
-     #:roman "Optima"
-     #:sans "MuseJazzText"
-     #:typewriter "Franklin Gothic Medium"
-     #:factor (/ staff-height pt 18)
-     ))
+  property-defaults.fonts.music = "emmentaler"
+  property-defaults.fonts.serif = "Optima"
+  property-defaults.fonts.sans = "MuseJazzText"
+  property-defaults.fonts.typewriter = "Franklin Gothic Medium"
   ragged-bottom = ##t
   print-all-headers = ##t
   tocTitleMarkup = \markup \huge \bold \column {
