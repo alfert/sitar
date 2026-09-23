@@ -7,7 +7,7 @@ This is a custom **Sargam notation system** for Indian classical music using Lil
 **Key Components:**
 
 - `raag.ly` - Core Sargam library with custom engravers, pitch definitions, and rendering functions
-- `../paper.ily` - Global paper and font configuration (Optima, MuseJazzText, etc.)
+- `paper.ily` - Global paper and font configuration (Optima, MuseJazzText, etc.)
 - Individual composition files (e.g., `raag-yaman-kalyan.ly`) that include raag.ly
 
 ## Build & Compilation Commands
@@ -15,13 +15,8 @@ This is a custom **Sargam notation system** for Indian classical music using Lil
 ### Single File Compilation
 
 ```bash
-# From the file's directory
-cd /Users/kal/Documents/lily/yoga/aquarian-chants/sitar
+cd ~/src/lily/sitar
 lilypond raag-yaman-kalyan.ly
-
-# From parent directory
-cd /Users/kal/Documents/lily/yoga/aquarian-chants
-cd sitar && lilypond raag-yaman-kalyan.ly
 ```
 
 ### Other Useful Commands
@@ -49,14 +44,11 @@ lilypond --version
 ## File Structure
 
 ```
-sitar/
-├── raag.ly              # Core Sargam library (handle with care!)
-├── raag-yaman-kalyan.ly # Example composition
-├── raad-demo.ly         # Demo file
-└── *.pdf                # Generated outputs (git-ignored)
-
-../
-└── paper.ily            # Global paper/font configuration
+raag.ly                  # Core Sargam library (handle with care!)
+paper.ily                # Global paper/font configuration
+raag-yaman-kalyan.ly     # Example composition
+raad-demo.ly              # Demo file
+*.pdf                     # Generated outputs (git-ignored)
 ```
 
 **Note:** PDF files are git-ignored by design. Only source `.ly` files are tracked.
@@ -82,7 +74,7 @@ Follow this standard order:
 ```lilypond
 \version "2.24.0"
 
-\include "../paper.ily"
+\include "paper.ily"
 \include "raag.ly"
 
 % Variable definitions
@@ -500,7 +492,7 @@ The `tasks.json` problem matcher is configured to parse both English and German 
 ### Common Issues
 
 1. **Missing include files**
-   - Check relative paths: `\include "../paper.ily"`
+   - Check relative paths: `\include "paper.ily"`
    - Ensure raag.ly is in the same directory
 
 2. **Pitch name typos**
