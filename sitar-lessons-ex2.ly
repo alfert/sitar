@@ -1,6 +1,6 @@
 \version "2.24.0"
 
-\include "../paper.ily"
+\include "paper.ily"
 \include "raag.ly"
 \language "sargam"
 
