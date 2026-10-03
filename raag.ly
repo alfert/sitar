@@ -90,7 +90,9 @@ diri =
 %% Indian Rhythms
 jhaptal = \timeAbbrev #'((2 3 2 3 4))
 tintal = \timeAbbrev #'((4 4 4 4 4))
-jattaal = \timeAbbrev #'((4 4 4))
+% jattaal = \timeAbbrev #'((4 4 4))
+% jattaal = \time #'((4 4) . 4) 
+jattaal = \time #'((4) (4) ) 8/4 
 
 %%%%%%%%%%%%%%%%%%%%
 
