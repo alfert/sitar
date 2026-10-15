@@ -60,9 +60,9 @@ raad-demo.ly              # Demo file
 Always start files with a version declaration:
 
 ```lilypond
-\version "2.24.0"  % Preferred
+\version "2.26.0"  % Preferred
 % OR
-\version "2.24"    % Also acceptable
+\version "2.26"    % Also acceptable
 ```
 
 Most files use `"2.24.0"`, some older compositions use `"2.18.0"`.
@@ -72,7 +72,7 @@ Most files use `"2.24.0"`, some older compositions use `"2.18.0"`.
 Follow this standard order:
 
 ```lilypond
-\version "2.24.0"
+\version "2.26.0"
 
 \include "paper.ily"
 \include "raag.ly"
@@ -523,7 +523,7 @@ lilypond --loglevel=DEBUG raag-yaman-kalyan.ly
 
 **Key Priorities:**
 
-1. Maintain compatibility with LilyPond 2.24.x
+1. Maintain compatibility with LilyPond 2.26.x
 2. Follow Sargam pitch naming conventions (S, Re, G, M, P, D, N)
 3. Use camelCase for music variables with Roman numerals
 4. Test all changes by compiling to PDF
@@ -538,3 +538,5 @@ lilypond --loglevel=DEBUG raag-yaman-kalyan.ly
 5. Document any new engraver behavior or custom functions
 
 **When in doubt:** Consult `raag.ly` for implementation patterns and existing engravers. The codebase is highly specialized, so following established patterns is critical for success.
+
+If you need to check the lilypond source code, it is available under $HOME/src/lily/lilypond
