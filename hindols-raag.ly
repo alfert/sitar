@@ -13,16 +13,16 @@ melodyGatI = \relative S' {
   N'8 N D4 N
   \repeat volta 2 {  
     \mark "dacapo"
-    S \chik 4  S  N \bar "!"  
-    D n8 n D4  P \bar "!"  
+    S \chik 4  S  N   
+    D n8 n D4  P  
     \break
-    D G P8 P m8 m  \bar "!"  
+    D G P8 P m8 m 
     G r m G r m   Re4 |
     
-    G P8 P D4 N  \bar "!" 
-    S Re8 Re S4 N \bar "!"  
+    G P8 P D4 N  
+    S Re8 Re S4 N 
     \break
-    D8 r n D r8 n P4 \bar "!" 
+    D8 r n D r8 n P4 
     \chik 4  
     n8 n D4  N 
     |
@@ -35,22 +35,22 @@ melodyGatI = \relative S' {
 melodyGatII = \relative S' {
    \mark "Antara" 
    \repeat volta 2 {
-     G P8 P P4 N   \bar  "!"  
-     \chik 4  N D N  \bar "!"  
-     S Re G8 G P8 P  \bar "!"  
+     G P8 P P4 N   %\bar  "!"  
+     \chik 4  N D N % \bar "!"  
+     S Re G8 G P8 P  %\bar "!"  
      G r m Re r Re S4 | 
      
    }
    \break
-   N4 S8 S D4 n \bar "!"  
-   D P8 P m4 G \bar "!"  
-   D G P8 P m8 m  \bar "!"  
+   N4 S8 S D4 n %\bar "!"  
+   D P8 P m4 G %\bar "!"  
+   D G P8 P m8 m  %\bar "!"  
    G r m G r m   Re4 
    \break 
-   G P8 P D4 N  \bar "!" 
-   S Re8 Re S4 N \bar "!"  
+   G P8 P D4 N  %\bar "!" 
+   S Re8 Re S4 N %\bar "!"  
     \break
-    D8 r n D r8 n P4 \bar "!" 
+    D8 r n D r8 n P4 %\bar "!" 
     \chik 4  
     n8 n D4  N 
     \bar "|."
