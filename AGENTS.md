@@ -322,6 +322,8 @@ the `\layout` block.
 - Custom bar extent for visibility
 - Overrides NoteHead.stencil with `sargamHeadStencil`
 - Includes all RhythmicStaff engravers plus custom engravers
+- Aliased to `RhythmicStaff` and `Staff`, so `\set Staff.…` commands such as
+  `\submeasureBarsOn` work inside it
 
 ## Custom Engravers (Brief Documentation)
 

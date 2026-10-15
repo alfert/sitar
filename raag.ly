@@ -611,6 +611,9 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
     \consists #Bol_arc_engraver
 
     \alias RhythmicStaff
+    %% Catch Staff-level settings like \submeasureBarsOn (= \set Staff.…),
+    %% as LilyPond's own RhythmicStaff does.
+    \alias Staff
   }
   \context {
     \SargamStaff
