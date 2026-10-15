@@ -4,36 +4,10 @@
 \include "raag.ly"
 \language "sargam"
 
-melodyGatI = \relative S' {
-  
-  % Start at Beat 13
-  \partial 4*4
-  \mark "Sthaayi"
-  \chik 4 
-  N'8 N D4 N
-  \repeat volta 2 {  
-    \mark "dacapo"
-    S \chik 4  S  N   
-    D n8 n D4  P  
-    \break
-    D G P8 P m8 m 
-    G r m G r m   Re4 |
-    
-    G P8 P D4 N  
-    S Re8 Re S4 N 
-    \break
-    D8 r n D r8 n P4 
-    \chik 4  
-    n8 n D4  N 
-    |
-  }
-  % \bar ":|."
-  
-}
-
-
+%% Antara (defined first: melodyGatI plays it inside the segno repeat)
 melodyGatII = \relative S' {
-   \mark "Antara" 
+   \break
+   \sectionLabel "Antara"
    \repeat volta 2 {
      G P8 P P4 N   %\bar  "!"  
      \chik 4  N D N % \bar "!"  
@@ -52,9 +26,37 @@ melodyGatII = \relative S' {
     \break
     D8 r n D r8 n P4 %\bar "!" 
     \chik 4  
-    n8 n D4  N 
-    \bar "|."
+    n8 n D4  N
+    \section
+}
+
+
+melodyGatI = \relative S' {
+  
+  % Start at Beat 13
+  \partial 4*4
+  \sectionLabel "Sthaayi"
+  \chik 4
+  N'8 N D4 N
+  \repeat segno 2 {
+    \repeat volta 2 {
+      S \chik 4  S  N   
+      D n8 n D4  P  
+      \break
+      D G P8 P m8 m 
+      G r m G r m   Re4 |
     
+      G P8 P D4 N  
+      S Re8 Re S4 N 
+      \break
+      D8 r n D r8 n P4 
+      \chik 4  
+      n8 n D4  N 
+      |
+    }
+    \volta 2 \fine
+    \volta 1 \melodyGatII   % Antara, then D.S. al Fine
+  }
 }
 
 \language "deutsch"
@@ -68,8 +70,6 @@ melodyGatII = \relative S' {
         \tintal
         
         \melodyGatI
-        \break
-        \melodyGatII
       }
     }
 %
@@ -81,7 +81,6 @@ melodyGatII = \relative S' {
          \submeasureBarsOn
         \new SargamVoice = "gatI" {
           \melodyGatI
-          \melodyGatII
         }
 
     }
@@ -95,12 +94,3 @@ melodyGatII = \relative S' {
 
 }
 
-
-
-%{
-convert-ly (GNU LilyPond) 2.26.0  convert-ly: Processing `'...
-Applying conversion: 2.25.0, 2.25.1, 2.25.2, 2.25.3, 2.25.4, 2.25.5,
-2.25.6, 2.25.8, 2.25.9, 2.25.11, 2.25.12, 2.25.13, 2.25.18, 2.25.22,
-2.25.23, 2.25.24, 2.25.25, 2.25.26, 2.25.28, 2.25.30, 2.25.31,
-2.25.32, 2.25.33, 2.25.34, 2.25.35, 2.25.80, 2.26.0
-%}
