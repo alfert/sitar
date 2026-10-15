@@ -31,7 +31,7 @@ rm *.pdf
 # Syntax validation with detailed logging
 lilypond --loglevel=DEBUG raag-yaman-kalyan.ly
 
-# Check LilyPond version (should be 2.24.x)
+# Check LilyPond version (should be 2.26.x)
 lilypond --version
 ```
 
@@ -39,7 +39,7 @@ lilypond --version
 
 - **Build command:** `Cmd+Shift+B` (uses tasks.json default build task)
 - The task runs `lilypond ${fileBasename}` in the file's directory
-- Problem matcher configured for English/German error messages
+- Problem matcher: see "Error Handling → VSCode Integration" below
 
 ## File Structure
 
@@ -65,7 +65,7 @@ Always start files with a version declaration:
 \version "2.26"    % Also acceptable
 ```
 
-Most files use `"2.24.0"`, some older compositions use `"2.18.0"`.
+Existing files predate this: most use `"2.24.0"`, some older compositions use `"2.18.0"`. Migrate to 2.26.0 when touching a file.
 
 ### Include Order
 
@@ -393,14 +393,7 @@ G   M M   P P   D D
 
 ### Testing After Engraver Modifications
 
-Always test with a known working file after modifying engravers:
-
-```bash
-lilypond raag-yaman-kalyan.ly
-open raag-yaman-kalyan.pdf
-```
-
-Check for:
+Always test with a known working file after modifying engravers (see "Build & Compilation Commands" above). Check for:
 
 - Unexpected note positioning
 - Missing voice line connections
@@ -496,8 +489,7 @@ The `tasks.json` problem matcher is configured to parse both English and German 
    - Ensure raag.ly is in the same directory
 
 2. **Pitch name typos**
-   - Remember: Sargam uses `S, Re, G, M, P, D, N` (not `c, d, e, f, g, a, b`)
-   - Lowercase variants: `re, g, m, d, n` are flats
+   - See "Sargam Pitch Names" above for the full letter table
 
 3. **Bracket/brace mismatches**
    - LilyPond: `{ }` for music, `< >` for chords
