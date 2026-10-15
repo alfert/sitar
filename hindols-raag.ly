@@ -77,8 +77,8 @@ melodyGatI = \relative S' {
       \set SargamStaff.instrumentName = "Sargam"
       \key d \major
 
+        \submeasureBarsOn
         \tintal
-         \submeasureBarsOn
         \new SargamVoice = "gatI" {
           \melodyGatI
         }
