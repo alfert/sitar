@@ -263,11 +263,10 @@ duration:
 ### Special Commands
 
 ```lilypond
-\chik 4    % Chikari stroke of the given duration (a rest played on the drone
-           %   strings). Takes a REQUIRED duration: \chik 4, \chik 8, \chik 16…
-           %   Normal Staff: rest + tick mark above. SargamStaff: the rest is
-           %   replaced by the tick-mark glyph (no dash). Counts toward the
-           %   beat-grouping arc like any other event.
+\chik 4    % Chikari stroke (drone strings). REQUIRED duration: \chik 4, \chik 8…
+           %   A note (not a rest), tagged 'chik. Normal Staff: slash head on the
+           %   middle line (guitar strumming style). Sargam: letter "C". Does not
+           %   shift the \relative reference pitch.
 \tintal    % 16-beat tala cycle (4+4+4+4)
 \jhaptal   % 10-beat tala cycle (2+3+2+3)
 ```

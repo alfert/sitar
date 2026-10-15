@@ -4,29 +4,27 @@
 
 %% Special commands for Sitar
 
-%% A chikari ("chik") stroke: the open drone/rhythm strings, struck on an
-%% otherwise silent beat. Rhythmically it is a rest, so it still counts toward
-%% the beat-grouping arc, but it is drawn as a tick-mark glyph (see
-%% sargamRestStencil) instead of the rest dash.
+%% A chikari ("chik") stroke: the open drone/rhythm strings, struck on the beat.
+%% Takes a duration: \chik 4 (one beat, the usual case), \chik 8, \chik 16, ...
 %%
-%% Takes a duration so it can be played at any speed: \chik 4 (one beat, the
-%% usual case), \chik 8, \chik 16, \chik 32, ... In a normal Staff it shows as a
-%% rest of that duration with a tick mark above it.
-#(set-object-property! 'sargam-chik 'backend-type? boolean?)
-#(set-object-property! 'sargam-chik 'backend-doc
-  "set on a Rest grob to mark it as a chikari stroke (drawn as a tick mark)")
+%% It is a note tagged 'chik, so it counts toward the beat-grouping arc and
+%% shows its duration (stem, flag, beam). Normal Staff: a slash head on the
+%% middle line, like a guitar strumming pattern. Sargam: the letter "C" (see
+%% sargamHeadStencil). The pitch is Sa, which every key contains (no accidental),
+%% wrapped in \absolute so it does not shift the \relative reference pitch.
+#(set-object-property! 'chik 'music-type? boolean?)
+#(set-object-property! 'chik 'music-doc
+  "set on a NoteEvent to mark it as a chikari stroke")
 
 chik =
 #(define-music-function (dur) (ly:duration?)
-   #{
-     %% A rest of the given duration, tagged as a chikari stroke. The tick-mark
-     %% articulation shows above the rest in a normal Staff; the SargamStaff has
-     %% no Script engraver, so there it is replaced by the tick-mark glyph that
-     %% sargamRestStencil draws on the baseline (no double mark).
-     \tweak sargam-chik ##t
-     r $dur ^\markup { \center-align \musicglyph #"scripts.tickmark" }
-   #})
-% chik = { \arpeggioArrowDown r4\arpeggio \arpeggioNormal}
+   (make-music 'UnrelativableMusic
+     'element (make-music 'NoteEvent
+                'pitch (ly:make-pitch 0 0 NATURAL)
+                'duration dur
+                'chik #t
+                'tweaks '(((NoteHead . style) . slash)
+                          ((NoteHead . staff-position) . 0)))))
 
 %% Bols (mizrab / plectrum strokes) — a stroke-annotation row below the notes.
 %% Conceptually like violin bowing or guitar picking, so these work on ANY
@@ -503,14 +501,16 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
           (dur-log (ly:grob-property grob 'duration-log))
           (cause (event-cause grob))
           (raw-pitch (ly:event-property cause 'pitch))
+          ;; chikari stroke (\chik): letter "C", no octave dots
+          (chik? (ly:event-property cause 'chik #f))
           ;; Sa reference for this staff (default C); makes the letter Sa-relative
           ;; so it survives \transpose. Set via \sargamSa.
           (sa (let ((v (ly:grob-property grob 'sargam-sa #f)))
                 (if (ly:pitch? v) v sargam-sa-default)))
           ;; register (saptak) dots relative to Sa: 0 = middle (no dots).
-          (octave (sargam-register raw-pitch sa))
+          (octave (if chik? 0 (sargam-register raw-pitch sa)))
           (semitone (sargam-semitone-from-sa raw-pitch sa))
-          (head0 (sargam-letter raw-pitch sa))
+          (head0 (if chik? "C" (sargam-letter raw-pitch sa)))
           ;; tivra Ma (6 semitones above Sa) -> barred capital M (Bhatkhande)
           (head (if (= semitone 6) (markup #:sargamBarredM) head0))
           (note-dur (ly:event-property cause 'duration))
@@ -544,18 +544,10 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
 %% notation rules. It sits in the same baseline as the note letters and, like a
 %% note, counts as one subdivision of its beat (so it can sit under a grouping
 %% arc). We render an en-dash in the same bold style as the letters.
-%%
-%% A chikari stroke (\chik) is rhythmically a rest too, but is marked with the
-%% `sargam-chik` property and drawn as a tick-mark glyph instead of the dash.
 #(define (sargamRestStencil grob)
-   (if (ly:grob-property grob 'sargam-chik #f)
-       (grob-interpret-markup grob
-         (make-lower-markup 0.5
-           (make-center-align-markup
-             (make-musicglyph-markup "scripts.tickmark"))))
-       (grob-interpret-markup grob
-         (make-lower-markup 0.5
-           (make-bold-markup "–")))))
+   (grob-interpret-markup grob
+     (make-lower-markup 0.5
+       (make-bold-markup "–"))))
 
 
 \layout {
