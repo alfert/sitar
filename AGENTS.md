@@ -48,6 +48,8 @@ raag.ly                  # Core Sargam library (handle with care!)
 paper.ily                # Global paper/font configuration
 raag-yaman-kalyan.ly     # Example composition
 raad-demo.ly              # Demo file
+hindols-raag.ly           # Composition with segno repeat, meends, chiks
+*-test.ly                 # Feature tests (see "Testing After Engraver Modifications")
 *.pdf                     # Generated outputs (git-ignored)
 ```
 
@@ -409,12 +411,36 @@ G   M M   P P   D D
 
 ### Testing After Engraver Modifications
 
-Always test with a known working file after modifying engravers (see "Build & Compilation Commands" above). Check for:
+After any change to `raag.ly`, compile ALL test files and compositions and
+check the console for errors/warnings:
+
+| file                  | checks                                                  |
+| --------------------- | ------------------------------------------------------- |
+| `meend-test.ly`       | meend arc above letters, slur + glissando on the Staff   |
+| `chik-test.ly`        | chik slash heads, letter C, `\relative` continuity      |
+| `beat-arc-test.ly`    | beat-grouping arcs                                      |
+| `rhythm-test.ly`      | rhythm notation                                         |
+| `raag-yaman-kalyan.ly`, `hindols-raag.ly`, `raad-demo.ly` | real scores (regressions) |
+
+Each test file states in its header comment what the output should look like.
+
+**Visual check: use high resolution and crop.** Low-resolution previews
+mislead: at ~110 dpi a meend arc 0.4 staff spaces above the letters looks as if
+it sits ON them. Render with:
+
+```bash
+lilypond --png -dresolution=220 -dcrop -o /tmp/out file.ly
+```
+
+Check for:
 
 - Unexpected note positioning
-- Missing voice line connections
 - Grob errors in console output
-- Visual artifacts in PDF
+- Visual artifacts / collisions (arcs vs octave dots, bols, bar lines)
+
+For geometry bugs, print the computed values (e.g. a temporary redefinition of
+the stencil callback with `format #t ...` in a scratch copy) before changing
+code: it separates "computed wrong" from "rendered/perceived wrong".
 
 ## Common Patterns & Score Structure
 
@@ -464,6 +490,30 @@ Most compositions use this pattern:
 
 Use `\transpose S Re { ... }` to shift from C (Sa) to D (Re), etc.
 Common transpositions maintain Sargam logic while fitting instrument ranges.
+
+### Section Labels and D.S. al Fine
+
+Name sections with `\sectionLabel "Sthaayi"` (not `\mark "..."`). For the gat
+form "sthaayi, antara, back to sam of the sthaayi" use LilyPond's segno repeat
+(see `hindols-raag.ly`): it prints the segno, Fine and "D.S. al Fine" itself.
+
+```lilypond
+melodyGatII = \relative S' { ... }       % antara, defined FIRST
+melodyGatI = \relative S' {
+  \partial 4*4 ...                       % mukhda pickup (before the segno)
+  \repeat segno 2 {
+    \repeat volta 2 { ... }              % sthaayi
+    \volta 2 \fine
+    \volta 1 \melodyGatII                % antara, then D.S. al Fine
+  }
+}
+```
+
+Use D.S. (Dal Segno), not D.C., when the jump target is not the very beginning
+(e.g. after a pickup). Do NOT use explicit `\fine` mid-piece (warns "music after
+\fine" outside `\repeat segno`) or `\textEndMark "Fine"` (text marks print once
+PER STAFF when the music variable is shared by Staff and SargamStaff; segno,
+Fine and jumps are de-duplicated).
 
 ### Layout Overrides
 
@@ -515,6 +565,18 @@ The `tasks.json` problem matcher is configured to parse both English and German 
    - Property names are case-sensitive: `NoteHead.stencil` not `notehead.stencil`
    - Use `\override` for grob properties, not direct assignment
 
+5. **Variable name collides with a pitch name**
+   - Under `\language "sargam"`, `m`, `d`, `g`, `n`, `S`, `P`, ... are pitches;
+     a variable called `m` gives "syntax error, unexpected NOTENAME_PITCH".
+     Use descriptive names (`melodyI`).
+
+6. **`;` comment after a top-level `#(define ...)`**
+   - Outside the Scheme expression the LilyPond parser reads `;` as an
+     "undefined character". Use `%` there; `;` only works inside `#( ... )`.
+
+7. **`\set Staff.…` has no effect in a custom staff**
+   - Only works if the context has `\alias Staff` (SargamStaff does).
+
 ### Debug Mode
 
 For verbose output with detailed diagnostics:
@@ -547,4 +609,7 @@ lilypond --loglevel=DEBUG raag-yaman-kalyan.ly
 
 **When in doubt:** Consult `raag.ly` for implementation patterns and existing engravers. The codebase is highly specialized, so following established patterns is critical for success.
 
-If you need to check the lilypond source code, it is available under $HOME/src/lily/lilypond
+If you need to check the lilypond source code, it is available under $HOME/src/lily/lilypond.
+Caveat: that checkout is from July 2024 and predates 2.26 features (e.g.
+submeasure bars). For the exact installed version read
+`/opt/homebrew/Cellar/lilypond/2.26.0/share/lilypond/2.26.0/{ly,scm}`.
