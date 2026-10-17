@@ -293,6 +293,21 @@ because the normal staff strips articulations before the note head is engraved).
 - On a SargamStaff a diri pair therefore shows the beat-grouping arc (⌣) ABOVE
   the letters (rhythm) and the diri caret (⌃) BELOW (matches the book).
 
+### Meend (glide)
+
+```lilypond
+\meend { S4 Re G M }        % one continuous glide over 2+ notes
+\meend { P2 \da M4 G }      % \da marks a stroke needed inside the meend
+```
+
+- Normal Staff: slur over all notes plus a glissando line between each pair
+  (added as articulations; SargamVoice has no Slur/Glissando engraver, so the
+  Sargam side ignores them).
+- SargamStaff: flat arc ABOVE the letters with rounded ends hooking onto the
+  first and last note (OME Bhatkhande font style), drawn by `Meend_engraver`.
+  The arc clears the tallest member including octave dots.
+- Errors if fewer than 2 notes.
+
 ### Bol_arc_engraver (raag.ly, after `Sargam_beat_arc_engraver`)
 
 Draws all bols (the `\da` bar `|`, the `\ra` dash `—`, and the `\diri` caret ⌃)

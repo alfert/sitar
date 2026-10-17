@@ -50,10 +50,13 @@ chik =
 #(set-object-property! 'bol 'music-doc
   "set on a NoteEvent to 'da or 'ra to mark a single-note plectrum stroke")
 
+%% All note events in @var{music}, in order (used by \da, \ra, \diri, \meend).
+#(define (sargam-note-events music)
+   (filter (lambda (e) (memq 'note-event (ly:music-property e 'types)))
+           (extract-named-music music '(NoteEvent))))
+
 #(define (sargam-tag-single-bol music kind)
-   (let ((notes (filter (lambda (e)
-                          (memq 'note-event (ly:music-property e 'types)))
-                        (extract-named-music music '(NoteEvent)))))
+   (let ((notes (sargam-note-events music)))
      (if (not (= (length notes) 1))
          (ly:error "\\da / \\ra must wrap exactly 1 note, got ~a" (length notes))
          (begin (ly:music-set-property! (car notes) 'bol kind) music))))
@@ -75,15 +78,40 @@ ra =
 
 diri =
 #(define-music-function (music) (ly:music?)
-   (let ((notes (filter (lambda (e)
-                          (memq 'note-event (ly:music-property e 'types)))
-                        (extract-named-music music '(NoteEvent)))))
+   (let ((notes (sargam-note-events music)))
      (if (not (= (length notes) 2))
          (ly:error "\\diri must wrap exactly 2 notes, got ~a" (length notes))
          (begin
            (ly:music-set-property! (car notes) 'diri LEFT)
            (ly:music-set-property! (cadr notes) 'diri RIGHT)
            music))))
+
+%% \meend wraps TWO OR MORE notes played as one continuous glide (one stroke).
+%%   Normal Staff: a slur over all notes plus a glissando line between each pair
+%%     (added as articulations; SargamVoice has no Slur/Glissando engraver, so
+%%     the Sargam side ignores them).
+%%   SargamStaff: a flat arc ABOVE the letters with ends hooking down onto the
+%%     first and last note (OME Bhatkhande style), drawn by Meend_engraver.
+%% A stroke needed inside the meend is written with \da on that note.
+#(set-object-property! 'meend 'music-type? symbol?)
+#(set-object-property! 'meend 'music-doc
+  "set on a NoteEvent to LEFT/RIGHT to mark the first/last note of a meend")
+
+meend =
+#(define-music-function (music) (ly:music?)
+   (let ((notes (sargam-note-events music)))
+     (if (< (length notes) 2)
+         (ly:error "\\meend must wrap at least 2 notes, got ~a" (length notes)))
+     (let ((add! (lambda (note ev)
+                   (ly:music-set-property! note 'articulations
+                     (cons ev (ly:music-property note 'articulations))))))
+       (ly:music-set-property! (car notes) 'meend LEFT)
+       (ly:music-set-property! (last notes) 'meend RIGHT)
+       (add! (car notes) (make-music 'SlurEvent 'span-direction START))
+       (add! (last notes) (make-music 'SlurEvent 'span-direction STOP))
+       (for-each (lambda (n) (add! n (make-music 'GlissandoEvent)))
+                 (drop-right notes 1))
+       music)))
 
 %% Indian Rhythms
 jhaptal =  \time #'((2) (3) (2) (3)) 10/4  
@@ -457,6 +485,66 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
               (ly:engraver-announce-end-grob engraver tie right)
               (set! pending-left #f))))))))))
 
+%% Meend arc (OME Bhatkhande style): a flat line ABOVE the letters from the
+%% first to the last note of the meend, its ends hooking down onto those two
+%% letters. The line sits a fixed gap above the TALLEST member (letter plus
+%% octave dots), so it stays flat and never hits a taar dot.
+#(define sargam-meend-gap 0.4)    % clearance above the tallest member
+#(define sargam-meend-hook 0.7)   % how far the ends hook down
+
+#(define ((sargam-meend-stencil members) grob)
+   (let* ((left (car members))
+          (right (last members))
+          (refx (ly:grob-common-refpoint left right X))
+          (self-x (ly:grob-relative-coordinate grob refx X))
+          (a (+ (- (ly:grob-relative-coordinate left refx X) self-x)
+                (car (ly:grob-extent left left X))))
+          (b (+ (- (ly:grob-relative-coordinate right refx X) self-x)
+                (cdr (ly:grob-extent right right X))))
+          ;; tallest member top, in the grob's own Y frame
+          (top (apply max
+                 (map (lambda (m)
+                        (let ((refy (ly:grob-common-refpoint grob m Y)))
+                          (- (+ (ly:grob-relative-coordinate m refy Y)
+                                (cdr (ly:grob-extent m m Y)))
+                             (ly:grob-relative-coordinate grob refy Y))))
+                      members)))
+          (h (+ top sargam-meend-gap sargam-meend-hook))
+          (r (min 1.2 (/ (- b a) 3))))   ; corner radius
+     (make-path-stencil
+       `(moveto ,a ,(- h sargam-meend-hook)
+         curveto ,a ,(- h 0.15) ,(+ a (* 0.3 r)) ,h ,(+ a r) ,h
+         lineto ,(- b r) ,h
+         curveto ,(- b (* 0.3 r)) ,h ,b ,(- h 0.15) ,b ,(- h sargam-meend-hook))
+       0.18 1 1 #f)))
+
+%% Collects the note heads of each \meend (tagged LEFT ... RIGHT) and draws one
+%% arc over them. Like the bols, a Tie spanner is used only as a positioning
+%% vehicle, parent-anchored to the first note head, with its stencil replaced.
+#(define (Meend_engraver context)
+   "Draws a meend arc above the letters of each \\meend."
+   (let ((members '()))   ; note heads of the open meend, newest first
+     (make-engraver
+      (acknowledgers
+       ((note-head-interface engraver grob source-engraver)
+        (let ((tag (ly:event-property (event-cause grob) 'meend #f)))
+          (cond
+           ((eqv? tag LEFT) (set! members (list grob)))
+           ((pair? members)
+            (set! members (cons grob members))
+            (when (eqv? tag RIGHT)
+              (let* ((heads (reverse members))
+                     (left (car heads))
+                     (arc (ly:engraver-make-grob engraver 'Tie left)))
+                (ly:spanner-set-bound! arc LEFT left)
+                (ly:spanner-set-bound! arc RIGHT grob)
+                (ly:grob-set-parent! arc Y left)
+                (ly:grob-set-parent! arc X left)
+                (ly:grob-set-property! arc 'stencil
+                  (sargam-meend-stencil heads))
+                (ly:engraver-announce-end-grob engraver arc grob)
+                (set! members '())))))))))))
+
 %% How many trailing beats does a note of @var{dur-log} (whole=0, half=1)
 %% occupy beyond its first beat, ignoring dots? Falls back to dur-log when the
 %% real duration is unavailable.
@@ -609,6 +697,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
     \consists Tie_engraver
     \consists #Sargam_beat_arc_engraver
     \consists #Bol_arc_engraver
+    \consists #Meend_engraver
 
     \alias RhythmicStaff
     %% Catch Staff-level settings like \submeasureBarsOn (= \set Staff.…),
