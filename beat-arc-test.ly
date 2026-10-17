@@ -2,6 +2,7 @@
 
 \include "paper.ily"
 \include "raag.ly"
+\language "sargam"
 
 %% Test cases for the per-beat grouping arc (Sargam_beat_arc_engraver)
 

@@ -24,9 +24,9 @@ melodyGatII = \relative S' {
    G P8 P D4 N  %\bar "!" 
    S Re8 Re S4 N %\bar "!"  
     \break
-    D8 r n D r8 n P4 %\bar "!" 
+    \meend {D4 n8 D4 n8 P4} 
     \chik 4  
-    n8 n D4  N
+    N8 N D4  N
     \section
 }
 
@@ -49,9 +49,9 @@ melodyGatI = \relative S' {
       G P8 P D4 N  
       S Re8 Re S4 N 
       \break
-      D8 r n D r8 n P4 
+      \meend {D4 n8 D4 n8 P4} 
       \chik 4  
-      n8 n D4  N 
+      N8 N D4  N 
       |
     }
     \volta 2 \fine
