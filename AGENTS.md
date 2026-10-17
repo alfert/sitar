@@ -260,7 +260,16 @@ duration:
 
   This matches the rest dash (a held beat reads the same as a rest beat) and is
   produced by `sargam-extra-beats` / `sargam-duration-postfix-markup`. Octave
-  dots and the em-dash tail coexist.
+  dots and the em-dash tail coexist. Rests follow the same rule (`r2` → `– –`).
+- **Notes crossing a beat boundary:** the held part continues as a dash IN THE
+  NEXT BEAT and counts under that beat's arc (sargam-rhythm.jpeg):
+  `S4. S4.` → `S – S –` with the arc under `– S`; `D4 n8 D4 n8 P4` →
+  `D | n D | – n | P`. Implemented by splitting notes/rests at beat boundaries
+  (`Completion_heads_engraver` in SargamVoice, `Completion_rest_engraver` in
+  SargamStaff, `completionUnit = 1/4`). `Sargam_continuation_engraver` marks
+  the split-off heads (`sargam-continuation`); they draw as `–` and never carry
+  bols or start/end a meend. A note starting ON a beat stays whole for a
+  power-of-two number of beats (`S2` → one head `S —`).
 
 ### Special Commands
 
@@ -330,7 +339,8 @@ the `\layout` block.
 **SargamVoice** (raag.ly:233)
 
 - Voice context with pitch squashing and slash-style note heads
-- Hidden stems, consists of Note_heads_engraver and Text_engraver
+- Hidden stems, consists of Completion_heads_engraver (beat splitting) and
+  Text_engraver
 - Aliased to standard Voice for compatibility
 
 **SargamStaff** (raag.ly:253)
@@ -365,6 +375,14 @@ This is **independent of beaming**. In 4/4, `M8 M P P D D` is one 6-note beam bu
 **three beats**, so it draws **three arcs** (M-M, P-P, D-D). And `G8 r8` is one
 beat with two subdivisions, so it is arced (`G —`). See `sargam-rhythm.jpeg` for
 the authoritative rule.
+
+**Nested arcs:** if the events of a beat have UNEQUAL durations, every
+half-beat holding two or more events also gets an inner arc (just under the
+letters; the beat arc then sits lower). `S32 S S S r8` → inner arc under the
+four 32nds, beat arc under all five (as in the book); `S8 S16 S16` → inner arc
+under the two 16ths; `S8. S16` → beat arc only. Equal subdivisions (8ths,
+16ths, triplets) never nest. Depths: `sargam-arc-depth`,
+`sargam-inner-arc-depth`, `sargam-outer-arc-depth`.
 
 **Status:** Working in single-staff and multi-staff, including rests. Triplets
 and sixteenths produce arcs but still need visual polish (collisions with the
@@ -419,7 +437,8 @@ check the console for errors/warnings:
 | `meend-test.ly`       | meend arc above letters, slur + glissando on the Staff   |
 | `chik-test.ly`        | chik slash heads, letter C, `\relative` continuity      |
 | `beat-arc-test.ly`    | beat-grouping arcs                                      |
-| `rhythm-test.ly`      | rhythm notation                                         |
+| `rhythm-test.ly`      | rhythm notation (compare with sargam-rhythm.jpeg)       |
+| `nested-arc-test.ly`  | nested half-beat arcs, beat splitting of held notes     |
 | `raag-yaman-kalyan.ly`, `hindols-raag.ly`, `raad-demo.ly` | real scores (regressions) |
 
 Each test file states in its header comment what the output should look like.

@@ -301,7 +301,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
 %% @var{left-nh} to @var{right-nh} (each may be a note head OR a rest).
 %% Coordinates are returned relative to the tie's own origin so they are
 %% independent of where the grob is parented.
-#(define ((sargam-arc-control-points left-nh right-nh) grob)
+#(define ((sargam-arc-control-points left-nh right-nh top dip) grob)
    (let* ((refp (ly:grob-common-refpoint left-nh right-nh X))
           (lx (ly:grob-relative-coordinate left-nh refp X))
           (rx (ly:grob-relative-coordinate right-nh refp X))
@@ -313,9 +313,8 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
           (self-x (ly:grob-relative-coordinate grob refp X))
           (a (- x0 self-x))
           (b (- x1 self-x))
-          (span (- b a))
-          (top -2.2)    ; arc endpoints: depth just below the letters
-          (dip -2.9))   ; arc middle: lowest point
+          (span (- b a)))
+     ;; top = depth of the arc endpoints, dip = depth of its lowest point
      (list (cons a top)
            (cons (+ a (* span 0.25)) dip)
            (cons (+ a (* span 0.75)) dip)
@@ -332,22 +331,50 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
 #(define (sargam-beat-index m)
    (inexact->exact (floor (/ m sargam-beat-length))))
 
+%% Arc depths (top . dip): a plain beat arc; and, for a NESTED beat, the
+%% inner half-beat arc just under the letters with the beat arc below it.
+#(define sargam-arc-depth '(-2.2 . -2.9))
+#(define sargam-inner-arc-depth '(-1.9 . -2.3))
+#(define sargam-outer-arc-depth '(-2.5 . -3.4))
+
 #(define (Sargam_beat_arc_engraver context)
    "Draws one grouping arc per BEAT (quarter note). Note heads AND rests are
     bucketed by the beat they start in; any beat containing two or more events
     gets a single arc spanning its first..last event. Rests count as members of
     the beat (a beat of `S8 r8` is two subdivisions, so it is arced), matching
-    the Sargam rhythmic notation. The arc is NOT a copy of LilyPond's beaming."
-   ;; Association list: beat-index -> list of grobs (note heads or rests).
+    the Sargam rhythmic notation. The arc is NOT a copy of LilyPond's beaming.
+    NESTING: if the events of a beat have UNEQUAL durations, every half-beat
+    holding two or more events gets an inner arc as well (`S32 S S S r8`:
+    inner arc under the four 32nds, beat arc under all five)."
+   ;; Association list: beat-index -> list of (grob . start-moment).
    (let ((by-beat '()))
      ;; File @var{grob} into the bucket for the beat it starts in.
      (define (bucket! grob)
-       (let* ((beat (sargam-beat-index
-                      (ly:moment-main (ly:context-current-moment context))))
+       (let* ((m (ly:moment-main (ly:context-current-moment context)))
+              (beat (sargam-beat-index m))
               (entry (assv beat by-beat)))
          (if entry
-             (set-cdr! entry (cons grob (cdr entry)))
-             (set! by-beat (cons (list beat grob) by-beat)))))
+             (set-cdr! entry (cons (cons grob m) (cdr entry)))
+             (set! by-beat (cons (list beat (cons grob m)) by-beat)))))
+     ;; One arc from the first to the last of @var{grobs} at @var{depth}.
+     (define (arc! engraver grobs depth)
+       (let* ((left (car grobs))
+              (right (last grobs))
+              (tie (ly:engraver-make-grob engraver 'Tie left)))
+         (ly:spanner-set-bound! tie LEFT left)
+         (ly:spanner-set-bound! tie RIGHT right)
+         ;; Anchor the arc's Y (and X) coordinate system on the left member,
+         ;; so the forced control points are interpreted relative to the
+         ;; Sargam letters in EVERY context (single- and multi-staff). Without
+         ;; this the arc inherits an ambiguous Y reference in multi-staff
+         ;; scores and renders far away / off the staff.
+         (ly:grob-set-parent! tie Y left)
+         (ly:grob-set-parent! tie X left)
+         (ly:grob-set-property! tie 'direction DOWN)
+         ;; Forced control points -> bypass broken auto positioning.
+         (ly:grob-set-property! tie 'control-points
+           (sargam-arc-control-points left right (car depth) (cdr depth)))
+         (ly:engraver-announce-end-grob engraver tie right)))
      (make-engraver
       (acknowledgers
        ;; A note head OR a rest occupies a subdivision of its beat.
@@ -359,26 +386,33 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
       ((finalize engraver)
        (for-each
         (lambda (entry)
-          (let ((members (reverse (cdr entry))))   ; chronological order
-            (when (>= (length members) 2)
-              (let* ((left (car members))
-                     (right (car (last-pair members)))
-                     (tie (ly:engraver-make-grob engraver 'Tie left)))
-                (ly:spanner-set-bound! tie LEFT left)
-                (ly:spanner-set-bound! tie RIGHT right)
-                ;; Anchor the arc's Y (and X) coordinate system on the left
-                ;; member, so the forced control points are interpreted
-                ;; relative to the Sargam letters in EVERY context (single-
-                ;; and multi-staff). Without this the arc inherits an
-                ;; ambiguous Y reference in multi-staff scores and renders
-                ;; far away / off the staff.
-                (ly:grob-set-parent! tie Y left)
-                (ly:grob-set-parent! tie X left)
-                (ly:grob-set-property! tie 'direction DOWN)
-                ;; Forced control points -> bypass broken auto positioning.
-                (ly:grob-set-property! tie 'control-points
-                  (sargam-arc-control-points left right))
-                (ly:engraver-announce-end-grob engraver tie right)))))
+          (let* ((members (reverse (cdr entry)))   ; chronological order
+                 (grobs (map car members))
+                 (lengths (map sargam-event-length grobs))
+                 (nested? (not (every (lambda (l) (equal? l (car lengths)))
+                                      lengths))))
+            (when (>= (length grobs) 2)
+              (if nested?
+                  (begin
+                    ;; inner arcs: half-beat groups of two or more events
+                    (for-each
+                     (lambda (half)
+                       (let ((group (filter-map
+                                     (lambda (gm)
+                                       (and (= half (inexact->exact
+                                                     (floor (/ (cdr gm)
+                                                               (/ sargam-beat-length 2)))))
+                                            (car gm)))
+                                     members)))
+                         (when (>= (length group) 2)
+                           (arc! engraver group sargam-inner-arc-depth))))
+                     (delete-duplicates
+                      (map (lambda (gm)
+                             (inexact->exact
+                              (floor (/ (cdr gm) (/ sargam-beat-length 2)))))
+                           members)))
+                    (arc! engraver grobs sargam-outer-arc-depth))
+                  (arc! engraver grobs sargam-arc-depth)))))
         by-beat)
        (set! by-beat '()))
        )))
@@ -451,12 +485,44 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
 %% explicit (from the \diri wrap). We reuse a Tie spanner ONLY as a positioning
 %% vehicle (forced parent-anchoring to a note head so it renders on both a normal
 %% Staff and the pitch-squashed SargamStaff), overriding its stencil.
+%% BEAT SPLITTING. In Sargam a note that crosses a beat boundary continues into
+%% the next beat as a dash, and that dash belongs to the next beat (counts under
+%% its arc): S4. S4. reads "S – S –" with an arc under "– S" (sargam-rhythm.jpeg).
+%% The SargamVoice therefore uses Completion_heads_engraver (and the SargamStaff
+%% Completion_rest_engraver) with completionUnit = one beat, which splits notes
+%% and rests at beat boundaries. The split-off CONTINUATION heads are real note
+%% heads in their own beat, so the beat arcs count them; they are drawn as "–".
+%% A continuation is a head created at a time step where no note event arrived.
+#(set-object-property! 'sargam-continuation 'backend-type? boolean?)
+#(set-object-property! 'sargam-continuation 'backend-doc
+  "set on a NoteHead that continues a note split at a beat boundary")
+#(if (not (memq 'sargam-continuation all-user-grob-properties))
+     (set! all-user-grob-properties
+           (cons 'sargam-continuation all-user-grob-properties)))
+
+#(define (sargam-continuation? grob)
+   (ly:grob-property grob 'sargam-continuation #f))
+
+#(define (Sargam_continuation_engraver context)
+   "Marks note heads that continue a note split at a beat boundary."
+   (let ((heard #f))
+     (make-engraver
+      (listeners
+       ((note-event engraver event) (set! heard #t)))
+      (acknowledgers
+       ((note-head-interface engraver grob source-engraver)
+        (unless heard
+          (ly:grob-set-property! grob 'sargam-continuation #t))))
+      ((stop-translation-timestep engraver) (set! heard #f)))))
+
 #(define (Bol_arc_engraver context)
    "Draws diri carets and \\da/\\ra single-note bols on the shared bol row."
    (let ((pending-left #f))
      (make-engraver
       (acknowledgers
        ((note-head-interface engraver grob source-engraver)
+        ;; bols mark the stroke only, never a beat-split continuation
+        (unless (sargam-continuation? grob)
         ;; Single-note bol (\da / \ra): a mark centered on this head.
         (let ((kind (sargam-bol-kind (event-cause grob))))
           (when (symbol? kind)
@@ -483,7 +549,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
               (ly:grob-set-property! tie 'stencil
                 (sargam-bol-triangle-stencil left right))
               (ly:engraver-announce-end-grob engraver tie right)
-              (set! pending-left #f))))))))))
+              (set! pending-left #f)))))))))))
 
 %% Meend arc (OME Bhatkhande style): a flat line ABOVE the letters from the
 %% first to the last note of the meend, its ends hooking down onto those two
@@ -527,7 +593,9 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
      (make-engraver
       (acknowledgers
        ((note-head-interface engraver grob source-engraver)
-        (let ((tag (ly:event-property (event-cause grob) 'meend #f)))
+        (let ((tag (if (sargam-continuation? grob)   ; a held dash: member only
+                       #f
+                       (ly:event-property (event-cause grob) 'meend #f))))
           (cond
            ((eqv? tag LEFT) (set! members (list grob)))
            ((pair? members)
@@ -581,7 +649,27 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
           (bar (make-line-stencil 0.22 cx (+ top 0.15) cx (+ top 0.75))))
      (ly:stencil-add m bar)))
 
+%% Dash(es) for a held beat: one "–" plus one per extra beat of @var{length}.
+#(define (sargam-dash-stencil grob dur-log length)
+   (grob-interpret-markup grob
+     (make-lower-markup 0.5
+       (make-bold-markup
+         (make-line-markup
+           (list "–" (sargam-duration-postfix-markup
+                       (sargam-extra-beats dur-log length))))))))
+
+#(define (sargam-event-length grob)
+   (let ((d (ly:event-property (event-cause grob) 'duration)))
+     (if (ly:duration? d) (ly:moment-main (ly:duration->moment d)) #f)))
+
 #(define (sargamHeadStencil grob)
+   (if (sargam-continuation? grob)
+       ;; a note held across a beat boundary: its continuation is a dash
+       (sargam-dash-stencil grob (ly:grob-property grob 'duration-log)
+                            (sargam-event-length grob))
+       (sargam-letter-stencil grob)))
+
+#(define (sargam-letter-stencil grob)
    (let* (
           (shape (ly:grob-property grob 'style))
           (dur-log (ly:grob-property grob 'duration-log))
@@ -629,18 +717,21 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
 %% A rest in Sargam notation is written as a dash (—), per the rhythmic
 %% notation rules. It sits in the same baseline as the note letters and, like a
 %% note, counts as one subdivision of its beat (so it can sit under a grouping
-%% arc). We render an en-dash in the same bold style as the letters.
+%% arc). We render an en-dash in the same bold style as the letters, one per
+%% beat for rests longer than a beat (r2 -> "– –").
 #(define (sargamRestStencil grob)
-   (grob-interpret-markup grob
-     (make-lower-markup 0.5
-       (make-bold-markup "–"))))
+   (sargam-dash-stencil grob (ly:grob-property grob 'duration-log)
+                        (sargam-event-length grob)))
 
 
 \layout {
   \context {
     \name SargamVoice
     \type Engraver_group
-    \consists Note_heads_engraver
+    %% splits notes at beat boundaries (completionUnit, set in SargamStaff)
+    \consists Completion_heads_engraver
+    \consists #Sargam_continuation_engraver
+    \omit Tie   % ties of split notes (our arcs are staff-level Tie grobs)
     \consists Stem_engraver
     \consists Text_engraver
     \consists Pitch_squash_engraver
@@ -670,6 +761,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
 
     \accepts Voice
     \accepts SargamVoice
+    completionUnit = #1/4   % one beat (= sargam-beat-length)
     \override NoteHead.stencil =  #(lambda (grob) (sargamHeadStencil grob))
     %% Rests are drawn as a dash (—) in Sargam notation.
     \override Rest.stencil =  #(lambda (grob) (sargamRestStencil grob))
@@ -687,7 +779,7 @@ head-name-from-pitch = #(define-scheme-function (pitch) (ly:pitch?)
     \consists Staff_highlight_engraver
     \consists Staff_symbol_engraver
     \consists Time_signature_engraver
-    \consists Rest_engraver
+    \consists Completion_rest_engraver   % splits rests at beat boundaries
     \consists Beam_engraver
     \consists Auto_beam_engraver
 
